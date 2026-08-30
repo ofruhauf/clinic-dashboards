@@ -20,14 +20,14 @@ interface InvestorViewProps {
 }
 
 const ACCENT = '#eb6834';
-const COMPARE_MONTHS_BACK = 3;
+const COMPARE_MONTHS_BACK = 1; // true month-over-month, not a multi-month window
 
-// Official partnership start per account, when it differs from the first
-// row in the data (e.g. a pre-launch pilot session). Story stats and charts
-// are anchored here; sessions before this date are noted but not counted.
-// Add more accounts here as needed.
+// Story-start date per account, when it differs from the first row in the
+// data (e.g. a one-off pilot session before real ramp-up began). Story stats
+// and charts are anchored here; sessions before this date are noted but not
+// counted. Add more accounts here as needed.
 const ACCOUNT_LAUNCH_DATES: Record<string, string> = {
-  horizon: '2026-07-01',
+  horizon: '2026-06-01',
 };
 
 export default function InvestorView({ rows, account }: InvestorViewProps) {
@@ -59,11 +59,11 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
     const compareIdx = Math.max(0, referenceMonths.length - 1 - COMPARE_MONTHS_BACK);
     const compareKey = referenceMonths[compareIdx];
     const actualMonthsBack = referenceMonths.length - 1 - compareIdx;
-    const compareSessions = metrics.sessionsByMonth.find((p) => p.month === compareKey);
+    const compareRevenue = metrics.revenueByMonth.find((p) => p.month === compareKey);
 
-    const growthMultiple =
-      actualMonthsBack > 0 && compareSessions && (compareSessions.total as number) > 0 && lastSessions
-        ? (lastSessions.total as number) / (compareSessions.total as number)
+    const revenueGrowthPct =
+      actualMonthsBack > 0 && compareRevenue && compareRevenue.revenue > 0 && lastRevenue
+        ? ((lastRevenue.revenue - compareRevenue.revenue) / compareRevenue.revenue) * 100
         : null;
 
     const firstPoint = metrics.sessionsByMonth[0];
@@ -79,9 +79,11 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
       lastKey,
       lastLabel: lastSessions?.label ?? firstPoint.label,
       lastSessionsCount: (lastSessions?.total as number) ?? firstPoint.total,
+      lastRevenueValue: lastRevenue?.revenue ?? 0,
       arrRunRate: lastRevenue ? lastRevenue.revenue * 12 : null,
-      growthMultiple,
-      compareLabel: compareSessions?.label ?? firstPoint.label,
+      revenueGrowthPct,
+      compareLabel: compareRevenue?.label ?? firstPoint.label,
+      compareRevenueValue: compareRevenue?.revenue ?? 0,
       actualMonthsBack,
       firstLabel: firstPoint.label,
       firstCount: firstPoint.total as number,
@@ -108,11 +110,14 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
           From {stats.firstCount} session{stats.firstCount === 1 ? '' : 's'} in {stats.firstLabel} to{' '}
           {stats.lastSessionsCount} in {stats.lastLabel}
         </h2>
-        {stats.growthMultiple != null && (
+        {stats.revenueGrowthPct != null && (
           <p style={{ fontSize: 16, color: '#52514e', marginTop: 4 }}>
-            <strong style={{ color: '#0b0b0b' }}>{stats.growthMultiple.toFixed(1)}x</strong> session growth over the
-            last {stats.actualMonthsBack} month{stats.actualMonthsBack === 1 ? '' : 's'} (
-            {stats.compareLabel} → {stats.lastLabel}).
+            <strong style={{ color: '#0b0b0b' }}>
+              {stats.revenueGrowthPct >= 0 ? '+' : ''}
+              {stats.revenueGrowthPct.toFixed(0)}%
+            </strong>{' '}
+            revenue growth month-over-month ({stats.compareLabel} → {stats.lastLabel}):{' '}
+            {formatCurrency(stats.compareRevenueValue)} → {formatCurrency(stats.lastRevenueValue)}.
           </p>
         )}
       </div>
@@ -125,9 +130,13 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
           accent={ACCENT}
         />
         <HeroStat
-          label="Session growth"
-          value={stats.growthMultiple == null ? '—' : `${stats.growthMultiple.toFixed(1)}x`}
-          sub={`vs. ${stats.actualMonthsBack} month${stats.actualMonthsBack === 1 ? '' : 's'} earlier`}
+          label="Revenue growth (MoM)"
+          value={
+            stats.revenueGrowthPct == null
+              ? '—'
+              : `${stats.revenueGrowthPct >= 0 ? '+' : ''}${stats.revenueGrowthPct.toFixed(0)}%`
+          }
+          sub={`${formatCurrency(stats.compareRevenueValue)} → ${formatCurrency(stats.lastRevenueValue)}`}
           accent={ACCENT}
         />
         <HeroStat
@@ -186,9 +195,10 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
         {launchDate && (
           <>
             {' '}
-            Figures reflect the official {account} launch on {launchDate}
+            Figures reflect {account} activity from {launchDate} (clinical ramp-up ahead of the formal contract
+            start)
             {preLaunchCount > 0
-              ? ` — excludes ${preLaunchCount} pre-launch pilot session${preLaunchCount === 1 ? '' : 's'}.`
+              ? ` — excludes ${preLaunchCount} earlier pilot session${preLaunchCount === 1 ? '' : 's'}.`
               : '.'}
           </>
         )}
