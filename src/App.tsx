@@ -1,20 +1,22 @@
 import { useMemo, useState } from 'react';
 import UploadPanel from './components/UploadPanel';
 import FilterBar from './components/FilterBar';
+import QueryBox from './components/QueryBox';
 import Overview from './pages/Overview';
 import AccountView from './pages/AccountView';
 import { parseExcelFile } from './lib/parseExcel';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
-import { listAccounts } from './lib/metrics';
-import type { DateRangePreset, ParsedDataset } from './lib/types';
+import { listAccounts, resolveDateRange } from './lib/metrics';
+import type { QueryContext } from './lib/query';
+import { DATE_RANGE_PRESETS, type DateRangePreset, type ParsedDataset } from './lib/types';
 
-type Tab = 'overview' | 'account';
+type Tab = 'account' | 'overview';
 
 export default function App() {
   const [dataset, setDataset] = useState<ParsedDataset | null>(() => loadDataset());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>('account');
   const [preset, setPreset] = useState<DateRangePreset>('last12');
   const [manuallySelectedAccount, setManuallySelectedAccount] = useState<string | null>(null);
 
@@ -28,6 +30,20 @@ export default function App() {
     const horizon = accounts.find((a) => a.name.toLowerCase() === 'horizon');
     return (horizon ?? accounts[0]).name;
   }, [accounts, manuallySelectedAccount]);
+
+  const queryContext: QueryContext = useMemo(() => {
+    const rows = dataset?.rows ?? [];
+    const scopeAccount = tab === 'account' ? selectedAccount : null;
+    const scopeRows = scopeAccount ? rows.filter((r) => r.account === scopeAccount) : rows;
+    const presetLabel = (DATE_RANGE_PRESETS.find((p) => p.value === preset)?.label ?? 'current range').toLowerCase();
+    return {
+      allRows: rows,
+      accounts,
+      defaultAccount: scopeAccount,
+      defaultRange: resolveDateRange(preset, scopeRows),
+      defaultRangeLabel: presetLabel,
+    };
+  }, [dataset, tab, selectedAccount, preset, accounts]);
 
   async function handleFile(file: File) {
     setBusy(true);
@@ -138,6 +154,10 @@ export default function App() {
         <p style={{ fontSize: 13, color: '#d03b3b', marginBottom: 16, fontWeight: 600 }}>{error}</p>
       )}
 
+      <div style={{ marginBottom: 18 }}>
+        <QueryBox context={queryContext} />
+      </div>
+
       <div
         style={{
           display: 'flex',
@@ -149,7 +169,7 @@ export default function App() {
         }}
       >
         <nav style={{ display: 'flex', gap: 4, background: '#f0efec', borderRadius: 10, padding: 3 }}>
-          {(['overview', 'account'] as Tab[]).map((t) => (
+          {(['account', 'overview'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}

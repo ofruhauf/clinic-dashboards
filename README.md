@@ -39,16 +39,29 @@ also serve from `/clinic-dashboards/` rather than `/`.
 ## Using the dashboard
 
 1. Open the app and drop in your appointments export (`.xlsx` or `.csv`).
-2. **Clinic overview** shows sessions, revenue, unique/new patients,
-   show-up rate, month-over-month growth, session mix by visit type,
-   revenue by month, account (payer) mix, and sessions by therapist.
-   Revenue is estimated at a flat **$140 per session** — there's no revenue
-   column in the raw data, so this is `sessions × $140`, not a billed amount.
-3. **Account view** (defaults to Horizon when present) shows the same set of
-   metrics scoped to one account, plus that account's share of total clinic
-   sessions over time. Use the account dropdown to switch to any other payer
-   in your data.
-4. Use **Replace data** to upload a new export at any time — it fully
+2. The **account view** (defaults to Horizon when present, the primary tab)
+   shows sessions, revenue, patients, show-up rate, and that account's share
+   of total clinic sessions over time. Use the account dropdown to switch to
+   any other payer in your data.
+3. **Clinic overview** (secondary tab) shows the same shape of metrics
+   clinic-wide: sessions, revenue, unique/new patients, show-up rate,
+   month-over-month growth, session mix by visit type, revenue by month,
+   account (payer) mix, and sessions by therapist. Revenue is estimated at a
+   flat **$140 per session** — there's no revenue column in the raw data, so
+   this is `sessions × $140`, not a billed amount.
+4. The **"Ask about your data"** box at the top answers one-off questions —
+   e.g. "what is last 3 months MoM growth?", "revenue last 6 months",
+   "Horizon show-up rate" — with a short text answer and, where a trend
+   applies, a small chart. It's a lightweight local pattern matcher (metric +
+   time range + optional account name), not a general-purpose LLM: it
+   recognizes sessions, revenue, new/active/cumulative patients, show-up
+   rate, and growth ("MoM", "month over month"), combined with a time phrase
+   ("last N months", "this/last month", "year to date", "all time", a named
+   month) and an optional account name (or "clinic" for clinic-wide). Leave
+   out a metric, time range, or scope and it falls back to the current tab's
+   filters. Nothing is sent anywhere — it runs entirely against the data
+   already in your browser.
+5. Use **Replace data** to upload a new export at any time — it fully
    replaces the current dataset. **Clear** removes the stored data and
    returns to the upload screen.
 

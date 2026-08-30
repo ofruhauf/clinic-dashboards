@@ -48,23 +48,44 @@ export function filterByRange(rows: AppointmentRow[], range: DateRange): Appoint
   });
 }
 
+/** Latest scheduled appointment date across `rows`, or null if empty. */
+export function latestDate(rows: AppointmentRow[]): Date | null {
+  if (rows.length === 0) return null;
+  return rows.reduce((max, r) => (r.scheduledFor > max ? r.scheduledFor : max), rows[0].scheduledFor);
+}
+
+/** Range covering the last `n` months ending with the month of the latest row (inclusive). */
+export function lastNMonthsRange(n: number, rows: AppointmentRow[]): DateRange {
+  const latest = latestDate(rows);
+  if (!latest) return { start: null, end: null };
+  const endOfMonth = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() + 1, 0, 23, 59, 59));
+  const start = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() - (n - 1), 1));
+  return { start, end: endOfMonth };
+}
+
 export function resolveDateRange(preset: string, rows: AppointmentRow[]): DateRange {
-  if (rows.length === 0) return { start: null, end: null };
-  const latest = rows.reduce((max, r) => (r.scheduledFor > max ? r.scheduledFor : max), rows[0].scheduledFor);
+  const latest = latestDate(rows);
+  if (!latest) return { start: null, end: null };
   const endOfMonth = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() + 1, 0, 23, 59, 59));
 
   switch (preset) {
     case 'ytd':
       return { start: new Date(Date.UTC(latest.getUTCFullYear(), 0, 1)), end: endOfMonth };
     case 'last3':
-      return { start: new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() - 2, 1)), end: endOfMonth };
+      return lastNMonthsRange(3, rows);
     case 'last6':
-      return { start: new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() - 5, 1)), end: endOfMonth };
+      return lastNMonthsRange(6, rows);
     case 'last12':
-      return { start: new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() - 11, 1)), end: endOfMonth };
+      return lastNMonthsRange(12, rows);
     default:
       return { start: null, end: null };
   }
+}
+
+/** Month keys strictly before the real current month — excludes an in-progress trailing month. */
+export function excludeCurrentMonth(months: string[]): string[] {
+  const currentMonth = monthKey(new Date());
+  return months.filter((m) => m < currentMonth);
 }
 
 /** Continuous month axis covering `range`, falling back to the full span of `rows` for an open range. */
@@ -218,8 +239,8 @@ export function computeMetrics(
   // Exclude the current (and any future) month from the trend — appointment data
   // routinely includes upcoming scheduled visits, so an in-progress month reads
   // as a misleading drop-off next to a completed one.
-  const currentMonth = monthKey(new Date());
-  const completeMonths = sessionsByMonth.filter((m) => m.month < currentMonth);
+  const completeMonthKeys = new Set(excludeCurrentMonth(months));
+  const completeMonths = sessionsByMonth.filter((m) => completeMonthKeys.has(m.month));
   const lastTwo = completeMonths.slice(-2);
   const momGrowthPct =
     lastTwo.length === 2 && lastTwo[0].total > 0

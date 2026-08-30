@@ -1,12 +1,4 @@
-import type { DateRangePreset } from '../lib/types';
-
-const PRESETS: { value: DateRangePreset; label: string }[] = [
-  { value: 'last3', label: 'Last 3 months' },
-  { value: 'last6', label: 'Last 6 months' },
-  { value: 'last12', label: 'Last 12 months' },
-  { value: 'ytd', label: 'Year to date' },
-  { value: 'all', label: 'All time' },
-];
+import { DATE_RANGE_PRESETS, type DateRangePreset } from '../lib/types';
 
 interface FilterBarProps {
   preset: DateRangePreset;
@@ -38,7 +30,7 @@ export default function FilterBar({ preset, onPresetChange, accounts, selectedAc
         </select>
       )}
       <select value={preset} onChange={(e) => onPresetChange(e.target.value as DateRangePreset)} style={selectStyle}>
-        {PRESETS.map((p) => (
+        {DATE_RANGE_PRESETS.map((p) => (
           <option key={p.value} value={p.value}>
             {p.label}
           </option>
