@@ -21,9 +21,11 @@ Vercel, Netlify, GitHub Pages, or any static file host.
 ## Using the dashboard
 
 1. Open the app and drop in your appointments export (`.xlsx` or `.csv`).
-2. **Clinic overview** shows sessions, unique/new patients, show-up rate,
-   month-over-month growth, session mix by visit type, account (payer) mix,
-   and sessions by therapist.
+2. **Clinic overview** shows sessions, revenue, unique/new patients,
+   show-up rate, month-over-month growth, session mix by visit type,
+   revenue by month, account (payer) mix, and sessions by therapist.
+   Revenue is estimated at a flat **$140 per session** — there's no revenue
+   column in the raw data, so this is `sessions × $140`, not a billed amount.
 3. **Account view** (defaults to Horizon when present) shows the same set of
    metrics scoped to one account, plus that account's share of total clinic
    sessions over time. Use the account dropdown to switch to any other payer

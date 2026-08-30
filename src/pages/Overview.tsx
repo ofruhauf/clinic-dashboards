@@ -6,9 +6,10 @@ import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
-import { computeMetrics, filterByRange, monthsForRange, resolveDateRange } from '../lib/metrics';
+import { REVENUE_PER_SESSION, computeMetrics, filterByRange, monthsForRange, resolveDateRange } from '../lib/metrics';
 import type { AppointmentRow, DateRangePreset } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
+import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 
 interface OverviewProps {
   rows: AppointmentRow[];
@@ -25,6 +26,7 @@ export default function Overview({ rows, preset }: OverviewProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <KpiCard label="Total sessions" value={metrics.totalSessions.toLocaleString()} />
+        <KpiCard label="Revenue" value={formatCurrency(metrics.revenue)} />
         <KpiCard label="Unique patients" value={metrics.uniquePatients.toLocaleString()} />
         <KpiCard label="New patients" value={metrics.newPatients.toLocaleString()} />
         <KpiCard
@@ -46,7 +48,17 @@ export default function Overview({ rows, preset }: OverviewProps) {
         </ChartCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <ChartCard title="Revenue by month" subtitle={`At $${REVENUE_PER_SESSION}/session`}>
+          <SimpleBarChart
+            data={metrics.revenueByMonth}
+            xKey="label"
+            yKey="revenue"
+            color={SERIES_COLORS[0]}
+            valueFormatter={formatCurrency}
+            tickFormatter={formatCurrencyCompact}
+          />
+        </ChartCard>
         <ChartCard title="New patients per month">
           <SimpleBarChart data={metrics.newPatientsByMonth} xKey="label" yKey="count" color={SERIES_COLORS[0]} />
         </ChartCard>

@@ -1,6 +1,7 @@
 import type { AppointmentRow, DateRange } from './types';
 
 export const SELF_PAY_LABEL = 'Self-pay / Other';
+export const REVENUE_PER_SESSION = 140;
 const OTHER_LABEL = 'Other';
 const MAX_SERIES = 4;
 const MAX_BAR_CATEGORIES = 8;
@@ -131,6 +132,8 @@ export interface DashboardMetrics {
   sessionsByTherapist: { name: string; count: number }[];
   accountMix: { name: string; count: number }[];
   momGrowthPct: number | null;
+  revenue: number;
+  revenueByMonth: { month: string; label: string; revenue: number }[];
 }
 
 /**
@@ -223,6 +226,13 @@ export function computeMetrics(
       ? ((lastTwo[1].total as number) - (lastTwo[0].total as number)) / (lastTwo[0].total as number)
       : null;
 
+  const revenue = totalSessions * REVENUE_PER_SESSION;
+  const revenueByMonth = sessionsByMonth.map((m) => ({
+    month: m.month,
+    label: m.label,
+    revenue: (m.total as number) * REVENUE_PER_SESSION,
+  }));
+
   return {
     totalSessions,
     uniquePatients,
@@ -236,6 +246,8 @@ export function computeMetrics(
     sessionsByTherapist,
     accountMix,
     momGrowthPct,
+    revenue,
+    revenueByMonth,
   };
 }
 
