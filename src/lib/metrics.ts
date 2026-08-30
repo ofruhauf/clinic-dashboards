@@ -82,10 +82,18 @@ export function resolveDateRange(preset: string, rows: AppointmentRow[]): DateRa
   }
 }
 
-/** Month keys strictly before the real current month — excludes an in-progress trailing month. */
-export function excludeCurrentMonth(months: string[]): string[] {
-  const currentMonth = monthKey(new Date());
-  return months.filter((m) => m < currentMonth);
+/**
+ * Month keys safe to treat as "complete": every month before the real current
+ * one, plus the current month itself once most of it has elapsed (>= 70% of
+ * its days) — a month that's 30/31 days in is a fair comparison, but one
+ * that's 3 days in isn't. Any month entirely in the future is always dropped.
+ */
+export function excludeCurrentMonth(months: string[], now: Date = new Date()): string[] {
+  const currentMonth = monthKey(now);
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  const elapsedFraction = now.getUTCDate() / daysInMonth;
+  const includeCurrentMonth = elapsedFraction >= 0.7;
+  return months.filter((m) => m < currentMonth || (m === currentMonth && includeCurrentMonth));
 }
 
 /** Continuous month axis covering `range`, falling back to the full span of `rows` for an open range. */

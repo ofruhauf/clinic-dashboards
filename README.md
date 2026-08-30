@@ -43,13 +43,25 @@ also serve from `/clinic-dashboards/` rather than `/`.
    shows sessions, revenue, patients, show-up rate, and that account's share
    of total clinic sessions over time. Use the account dropdown to switch to
    any other payer in your data.
-3. **Clinic overview** (secondary tab) shows the same shape of metrics
-   clinic-wide: sessions, revenue, unique/new patients, show-up rate,
-   month-over-month growth, session mix by visit type, revenue by month,
-   account (payer) mix, and sessions by therapist. Revenue is estimated at a
-   flat **$140 per session** — there's no revenue column in the raw data, so
-   this is `sessions × $140`, not a billed amount.
-4. The **"Ask about your data"** box at the top answers one-off questions —
+3. **Investor View** is a share-ready, single-account pitch page: a headline
+   ("From 1 session in May 2026 to 33 in Aug 2026"), four hero stats (ARR
+   run-rate, session growth multiple, revenue to date, time to traction), a
+   large cumulative-revenue chart, and supporting monthly-revenue /
+   share-of-clinic-volume charts. Unlike the other tabs it always shows the
+   account's *entire* history (not the date-range filter) — a pitch is the
+   whole story, not a filtered slice. A **Download as PDF** button (header,
+   visible on this tab) calls the browser's print dialog with a stylesheet
+   that hides all app chrome, so "Save as PDF" produces a clean page ready to
+   attach to an email or drop into a deck. Its growth stats compare complete
+   months only — the current calendar month counts once at least 70% of it
+   has elapsed, otherwise it's excluded so an early-month partial total can't
+   understate (or overstate) the story.
+4. **Clinic overview** shows the same shape of metrics clinic-wide: sessions,
+   revenue, unique/new patients, show-up rate, month-over-month growth,
+   session mix by visit type, revenue by month, and account (payer) mix.
+   Revenue is estimated at a flat **$140 per session** — there's no revenue
+   column in the raw data, so this is `sessions × $140`, not a billed amount.
+5. The **"Ask about your data"** box at the top answers one-off questions —
    e.g. "what is last 3 months MoM growth?", "revenue last 6 months",
    "Horizon show-up rate" — with a short text answer and, where a trend
    applies, a small chart. It's a lightweight local pattern matcher (metric +
@@ -61,7 +73,7 @@ also serve from `/clinic-dashboards/` rather than `/`.
    out a metric, time range, or scope and it falls back to the current tab's
    filters. Nothing is sent anywhere — it runs entirely against the data
    already in your browser.
-5. Use **Replace data** to upload a new export at any time — it fully
+6. Use **Replace data** to upload a new export at any time — it fully
    replaces the current dataset. **Clear** removes the stored data and
    returns to the upload screen.
 

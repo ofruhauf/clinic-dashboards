@@ -4,13 +4,14 @@ import FilterBar from './components/FilterBar';
 import QueryBox from './components/QueryBox';
 import Overview from './pages/Overview';
 import AccountView from './pages/AccountView';
+import InvestorView from './pages/InvestorView';
 import { parseExcelFile } from './lib/parseExcel';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
 import { listAccounts, resolveDateRange } from './lib/metrics';
 import type { QueryContext } from './lib/query';
 import { DATE_RANGE_PRESETS, type DateRangePreset, type ParsedDataset } from './lib/types';
 
-type Tab = 'account' | 'overview';
+type Tab = 'account' | 'overview' | 'investor';
 
 export default function App() {
   const [dataset, setDataset] = useState<ParsedDataset | null>(() => loadDataset());
@@ -91,6 +92,7 @@ export default function App() {
   return (
     <div style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 24px 48px' }}>
       <header
+        className="no-print"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -108,6 +110,23 @@ export default function App() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {tab === 'investor' && (
+            <button
+              onClick={() => window.print()}
+              style={{
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: '#fff',
+                background: '#eb6834',
+                border: 'none',
+                borderRadius: 8,
+                padding: '7px 12px',
+                cursor: 'pointer',
+              }}
+            >
+              Download as PDF
+            </button>
+          )}
           <label
             style={{
               fontSize: 12.5,
@@ -154,11 +173,12 @@ export default function App() {
         <p style={{ fontSize: 13, color: '#d03b3b', marginBottom: 16, fontWeight: 600 }}>{error}</p>
       )}
 
-      <div style={{ marginBottom: 18 }}>
+      <div className="no-print" style={{ marginBottom: 18 }}>
         <QueryBox context={queryContext} />
       </div>
 
       <div
+        className="no-print"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -169,7 +189,7 @@ export default function App() {
         }}
       >
         <nav style={{ display: 'flex', gap: 4, background: '#f0efec', borderRadius: 10, padding: 3 }}>
-          {(['account', 'overview'] as Tab[]).map((t) => (
+          {(['account', 'investor', 'overview'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -185,7 +205,7 @@ export default function App() {
                 boxShadow: tab === t ? '0 1px 2px rgba(11,11,11,0.10)' : 'none',
               }}
             >
-              {t === 'overview' ? 'Clinic overview' : selectedAccount ?? 'Account'}
+              {t === 'overview' ? 'Clinic overview' : t === 'investor' ? 'Investor View' : (selectedAccount ?? 'Account')}
             </button>
           ))}
         </nav>
@@ -203,6 +223,14 @@ export default function App() {
       {tab === 'account' &&
         (selectedAccount ? (
           <AccountView rows={dataset.rows} account={selectedAccount} preset={preset} />
+        ) : (
+          <p style={{ color: '#898781', fontSize: 14 }}>
+            No accounts (insurance payers) found in this dataset yet.
+          </p>
+        ))}
+      {tab === 'investor' &&
+        (selectedAccount ? (
+          <InvestorView rows={dataset.rows} account={selectedAccount} />
         ) : (
           <p style={{ color: '#898781', fontSize: 14 }}>
             No accounts (insurance payers) found in this dataset yet.

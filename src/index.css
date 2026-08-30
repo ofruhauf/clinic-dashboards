@@ -43,3 +43,22 @@ p {
 button {
   font-family: inherit;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  #root > div {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+}
