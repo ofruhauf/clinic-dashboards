@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import ChartCard from '../components/ChartCard';
 import KpiCard from '../components/KpiCard';
 import AccountMixChart from '../components/charts/AccountMixChart';
-import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
@@ -66,10 +65,6 @@ export default function Overview({ rows, preset }: OverviewProps) {
           <SimpleLineChart data={metrics.cumulativePatients} xKey="label" yKey="total" color={SERIES_COLORS[0]} />
         </ChartCard>
       </div>
-
-      <ChartCard title="Sessions by therapist" height={Math.max(200, metrics.sessionsByTherapist.length * 34)}>
-        <HorizontalBarChart data={metrics.sessionsByTherapist} categoryKey="name" valueKey="count" color={SERIES_COLORS[0]} />
-      </ChartCard>
     </div>
   );
 }

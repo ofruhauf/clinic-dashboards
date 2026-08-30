@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import ChartCard from '../components/ChartCard';
 import KpiCard from '../components/KpiCard';
-import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
@@ -89,10 +88,6 @@ export default function AccountView({ rows, account, preset }: AccountViewProps)
           <SimpleLineChart data={metrics.cumulativePatients} xKey="label" yKey="total" color={SERIES_COLORS[1]} />
         </ChartCard>
       </div>
-
-      <ChartCard title="Sessions by therapist" height={Math.max(180, metrics.sessionsByTherapist.length * 34)}>
-        <HorizontalBarChart data={metrics.sessionsByTherapist} categoryKey="name" valueKey="count" color={SERIES_COLORS[1]} />
-      </ChartCard>
     </div>
   );
 }

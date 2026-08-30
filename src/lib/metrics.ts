@@ -150,7 +150,6 @@ export interface DashboardMetrics {
   seriesKeys: string[];
   newPatientsByMonth: { month: string; label: string; count: number }[];
   cumulativePatients: { month: string; label: string; total: number }[];
-  sessionsByTherapist: { name: string; count: number }[];
   accountMix: { name: string; count: number }[];
   momGrowthPct: number | null;
   revenue: number;
@@ -221,12 +220,6 @@ export function computeMetrics(
     return { month: m, label: monthLabel(m), total: running };
   });
 
-  const therapistCounts = new Map<string, number>();
-  for (const row of rows) therapistCounts.set(row.therapist, (therapistCounts.get(row.therapist) ?? 0) + 1);
-  const sessionsByTherapist = Array.from(topCategories(therapistCounts, MAX_BAR_CATEGORIES).entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-
   const accountCounts = new Map<string, number>();
   for (const row of rows) {
     const label = accountLabel(row.account);
@@ -264,7 +257,6 @@ export function computeMetrics(
     seriesKeys,
     newPatientsByMonth,
     cumulativePatients,
-    sessionsByTherapist,
     accountMix,
     momGrowthPct,
     revenue,
