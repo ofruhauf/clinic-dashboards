@@ -44,18 +44,37 @@ also serve from `/clinic-dashboards/` rather than `/`.
    of total clinic sessions over time. Use the account dropdown to switch to
    any other payer in your data.
 3. **Investor View** is a share-ready, single-account pitch page: a headline
-   ("From 1 session in May 2026 to 33 in Aug 2026"), four hero stats (ARR
-   run-rate, session growth multiple, revenue to date, time to traction), a
-   large cumulative-revenue chart, and supporting monthly-revenue /
-   share-of-clinic-volume charts. Unlike the other tabs it always shows the
-   account's *entire* history (not the date-range filter) — a pitch is the
-   whole story, not a filtered slice. A **Download as PDF** button (header,
-   visible on this tab) calls the browser's print dialog with a stylesheet
-   that hides all app chrome, so "Save as PDF" produces a clean page ready to
-   attach to an email or drop into a deck. Its growth stats compare complete
-   months only — the current calendar month counts once at least 70% of it
-   has elapsed, otherwise it's excluded so an early-month partial total can't
-   understate (or overstate) the story.
+   ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), four hero stats (ARR
+   run-rate, revenue growth MoM, revenue to date, time to traction), a large
+   cumulative-revenue chart, a year-end ARR projection callout, supporting
+   monthly-revenue / share-of-clinic-volume charts, and a pipeline/expansion
+   section. Unlike the other tabs it always shows the account's *entire*
+   history (not the date-range filter) — a pitch is the whole story, not a
+   filtered slice. A **Download as PDF** button (header, visible on this tab)
+   calls the browser's print dialog with a stylesheet that hides all app
+   chrome, so "Save as PDF" produces a clean page ready to attach to an email
+   or drop into a deck. Its growth stats compare complete months only — the
+   current calendar month counts once at least 70% of it has elapsed,
+   otherwise it's excluded so an early-month partial total can't understate
+   (or overstate) the story.
+
+   A handful of small config maps at the top of `src/pages/InvestorView.tsx`
+   (keyed by account name, lowercase) drive facts the spreadsheet can't
+   express on its own — edit these directly as the real story changes:
+   - `ACCOUNT_LAUNCH_DATES` — story-start date, when it's later than the
+     first row in the data (e.g. a pre-launch pilot session).
+   - `ACCOUNT_REVENUE_OVERRIDES` — actual billed revenue per month, keyed by
+     `YYYY-MM`, overriding the flat $140/session estimate for months where
+     the real number is known. The footer discloses which months are actual
+     vs. estimated.
+   - `ACCOUNT_EOY_ARR_TARGET` — a stated year-end ARR goal; the page computes
+     and discloses the sustained month-over-month growth rate that goal
+     implies from the latest known month, rather than presenting the target
+     as if it were independently forecast.
+   - `ACCOUNT_ORGANIC_NOTE` — a short freeform note (e.g. "100% organic, zero
+     marketing spend") shown under the headline.
+   - `PIPELINE_TARGETS` / `PIPELINE_COVERED_LIVES` — the expansion pipeline
+     badges shown in the "playbook" section.
 4. **Clinic overview** shows the same shape of metrics clinic-wide: sessions,
    revenue, unique/new patients, show-up rate, month-over-month growth,
    session mix by visit type, revenue by month, and account (payer) mix.
