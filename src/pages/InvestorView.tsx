@@ -22,11 +22,27 @@ interface InvestorViewProps {
 const ACCENT = '#eb6834';
 const COMPARE_MONTHS_BACK = 3;
 
-export default function InvestorView({ rows, account }: InvestorViewProps) {
-  const accountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
+// Official partnership start per account, when it differs from the first
+// row in the data (e.g. a pre-launch pilot session). Story stats and charts
+// are anchored here; sessions before this date are noted but not counted.
+// Add more accounts here as needed.
+const ACCOUNT_LAUNCH_DATES: Record<string, string> = {
+  horizon: '2026-06-01',
+};
 
-  // Always the account's full trajectory, start to now — a pitch view isn't
-  // meant to be filtered, it's meant to tell the whole story.
+export default function InvestorView({ rows, account }: InvestorViewProps) {
+  const launchDate = ACCOUNT_LAUNCH_DATES[account.toLowerCase()];
+  const launchCutoff = useMemo(() => (launchDate ? new Date(`${launchDate}T00:00:00Z`) : null), [launchDate]);
+
+  const allAccountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
+  const accountRows = useMemo(
+    () => (launchCutoff ? allAccountRows.filter((r) => r.scheduledFor >= launchCutoff) : allAccountRows),
+    [allAccountRows, launchCutoff]
+  );
+  const preLaunchCount = allAccountRows.length - accountRows.length;
+
+  // Always the account's full trajectory since launch, through now — a pitch
+  // view isn't meant to be filtered, it's meant to tell the whole story.
   const months = useMemo(() => monthsForRange(accountRows, { start: null, end: null }), [accountRows]);
   const metrics = useMemo(() => computeMetrics(accountRows, months, accountRows), [accountRows, months]);
   const share = useMemo(() => computeShareOfTotal(accountRows, rows, months), [accountRows, rows, months]);
@@ -167,6 +183,15 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
         {metrics.uniquePatients.toLocaleString()} patients · Source: Agave Health scheduling export. Revenue is
         estimated at a flat ${REVENUE_PER_SESSION}/session (no billing data in the export) — illustrative, not billed
         revenue.
+        {launchDate && (
+          <>
+            {' '}
+            Figures reflect the official {account} launch on {launchDate}
+            {preLaunchCount > 0
+              ? ` — excludes ${preLaunchCount} pre-launch pilot session${preLaunchCount === 1 ? '' : 's'}.`
+              : '.'}
+          </>
+        )}
       </p>
     </div>
   );
