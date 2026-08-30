@@ -18,6 +18,24 @@ npm run preview  # preview the production build
 The production build in `dist/` is a fully static site — deploy it to
 Vercel, Netlify, GitHub Pages, or any static file host.
 
+## Live URL (GitHub Pages)
+
+Every push to the default branch builds and redeploys automatically via
+`.github/workflows/deploy-pages.yml`. One-time setup, in the repo's GitHub
+settings:
+
+1. **Settings → Pages → Build and deployment → Source**: choose
+   **GitHub Actions**.
+2. The repo needs to be public (or your account/org needs a plan that
+   supports Pages on private repos).
+
+After that, the dashboard is live at
+`https://<owner>.github.io/clinic-dashboards/` and updates within a minute
+or two of every push — check the **Actions** tab for build/deploy status.
+Note the app is served from that `/clinic-dashboards/` subpath (set via
+`base` in `vite.config.ts`), so `npm run dev` / `npm run preview` locally
+also serve from `/clinic-dashboards/` rather than `/`.
+
 ## Using the dashboard
 
 1. Open the app and drop in your appointments export (`.xlsx` or `.csv`).
