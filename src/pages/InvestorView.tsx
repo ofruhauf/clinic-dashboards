@@ -27,7 +27,7 @@ const COMPARE_MONTHS_BACK = 3;
 // are anchored here; sessions before this date are noted but not counted.
 // Add more accounts here as needed.
 const ACCOUNT_LAUNCH_DATES: Record<string, string> = {
-  horizon: '2026-06-01',
+  horizon: '2026-07-01',
 };
 
 export default function InvestorView({ rows, account }: InvestorViewProps) {
