@@ -170,21 +170,35 @@ export async function parseClaimsFile(file: File): Promise<{ rows: AppointmentRo
   return { rows, skippedCount };
 }
 
+function claimKey(row: Pick<AppointmentRow, 'encounterId' | 'scheduledFor'>): string | null {
+  if (!row.encounterId) return null;
+  return `${row.encounterId}|${row.scheduledFor.toISOString().slice(0, 10)}`;
+}
+
 /**
  * Merge freshly parsed rows into an existing dataset, matching by encounter
- * ID so re-uploading an overlapping week's report doesn't double-count.
- * When an encounter ID recurs, the newly uploaded row normally REPLACES the
- * existing one — claims data for a given encounter can get corrected between
- * reports (e.g. a visit type or procedure code fixed in a later week's
- * export). Rows without an encounter ID can't be matched and are always
- * appended.
+ * ID + service date so re-uploading an overlapping week's report doesn't
+ * double-count. When a match recurs, the newly uploaded row normally
+ * REPLACES the existing one — claims data for a given claim can get
+ * corrected between reports (e.g. a visit type or procedure code fixed in a
+ * later week's export). Rows without an encounter ID can't be matched and
+ * are always appended.
  *
- * One exception: uploads aren't guaranteed to happen in chronological report
- * order (someone may re-drop an old file after a newer one), so "whichever
- * upload came last" isn't a safe recency signal on its own. Real exports
- * have shown the same encounter first billed under a generic eval/therapy
- * code, then corrected to H0038 (coaching) in a later report — never the
- * reverse. So once an encounter is known to be a coaching claim, a
+ * IMPORTANT: matching is by (encounter ID, service date) together, NOT
+ * encounter ID alone. Real exports have shown the same external_encounter_id
+ * reused across genuinely different real visits for the same patient on
+ * different dates (confirmed against an RCM ground-truth report — three
+ * separate claim IDs, three different dates, one shared encounter ID).
+ * Deduping by encounter ID alone silently collapsed those into a single
+ * claim, dropping real revenue. A correction to the same claim keeps the
+ * same service date; a different date means a different claim.
+ *
+ * Within a genuine match, uploads aren't guaranteed to happen in
+ * chronological report order (someone may re-drop an old file after a newer
+ * one), so "whichever upload came last" isn't a safe recency signal on its
+ * own. Real exports have shown the same claim first billed under a generic
+ * eval/therapy code, then corrected to H0038 (coaching) in a later report —
+ * never the reverse. So once a claim is known to be a coaching claim, a
  * non-coaching version of it is treated as the stale pre-correction state
  * and never overwrites it, regardless of which file was uploaded more
  * recently.
@@ -195,14 +209,16 @@ export function mergeIntoDataset(
   parsed: { rows: AppointmentRow[]; skippedCount: number }
 ): ParsedDataset {
   const rows = existing ? [...existing.rows] : [];
-  const indexByEncounterId = new Map<string, number>();
+  const indexByClaimKey = new Map<string, number>();
   rows.forEach((row, i) => {
-    if (row.encounterId) indexByEncounterId.set(row.encounterId, i);
+    const key = claimKey(row);
+    if (key) indexByClaimKey.set(key, i);
   });
 
   let updatedCount = 0;
   for (const row of parsed.rows) {
-    const existingIndex = row.encounterId ? indexByEncounterId.get(row.encounterId) : undefined;
+    const key = claimKey(row);
+    const existingIndex = key ? indexByClaimKey.get(key) : undefined;
     if (existingIndex !== undefined) {
       const existingRow = rows[existingIndex];
       const isStaleDowngrade = isCoachingProcedureCode(existingRow.procedureCode) && !isCoachingProcedureCode(row.procedureCode);
@@ -212,7 +228,7 @@ export function mergeIntoDataset(
       updatedCount += 1;
       continue;
     }
-    if (row.encounterId) indexByEncounterId.set(row.encounterId, rows.length);
+    if (key) indexByClaimKey.set(key, rows.length);
     rows.push(row);
   }
 

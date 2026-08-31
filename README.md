@@ -44,17 +44,23 @@ also serve from `/clinic-dashboards/` rather than `/`.
    You can select or drop **multiple files at once**, and you can keep
    uploading new files over time (e.g. each week's report) — every upload
    *adds* to the existing dataset rather than replacing it. Claims are
-   matched by `external_encounter_id`, so re-uploading a report that
-   overlaps a previous one won't double-count those rows. If the same
-   encounter shows up again with different data (e.g. a visit type or
-   procedure code corrected in a later week's export), the newly uploaded
-   version normally replaces the older one — with one exception: an
-   encounter already recorded as a coaching claim (`procedure_code`
-   `H0038`) never gets overwritten by a non-coaching version of itself,
-   *no matter which file that came from or when it was uploaded*. Real
-   exports show claims getting corrected to H0038 in a later report, never
-   the other way around, so this protects a corrected claim from reverting
-   if you happen to (re-)upload an older report afterward. These matches
+   matched by **`external_encounter_id` + `date_of_service` together**, so
+   re-uploading a report that overlaps a previous one won't double-count
+   those rows. Encounter ID alone isn't used, because real exports have
+   shown the same `external_encounter_id` reused across genuinely different
+   claims for the same patient on different dates — matching by ID alone
+   silently collapsed those into a single claim and dropped real revenue.
+   A different service date is always treated as a different claim, even if
+   the encounter ID matches. If a claim (matched by both fields) shows up
+   again with different data (e.g. a visit type or procedure code corrected
+   in a later week's export), the newly uploaded version normally replaces
+   the older one — with one exception: a claim already recorded as coaching
+   (`procedure_code` `H0038`) never gets overwritten by a non-coaching
+   version of itself, *no matter which file that came from or when it was
+   uploaded*. Real exports show claims getting corrected to H0038 in a
+   later report, never the other way around, so this protects a corrected
+   claim from reverting if you happen to (re-)upload an older report
+   afterward. These matches
    are counted as "claims updated by a later upload" in the header, whether
    or not the row's data actually changed.
 2. The **account view** (defaults to Horizon when present, the primary tab)

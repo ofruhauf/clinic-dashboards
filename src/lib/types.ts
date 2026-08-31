@@ -8,7 +8,8 @@ export interface AppointmentRow {
   chargeAmount: number; // actual billed amount, in dollars
   procedureCode: string | null;
   showUp: boolean | null; // not present in claims data; always null, kept so show-up-rate code degrades gracefully
-  encounterId: string; // external_encounter_id — used to dedupe across uploaded files
+  encounterId: string; // external_encounter_id — combined with scheduledFor to dedupe across
+  // uploaded files (not unique on its own; real exports reuse it across different real claims)
 }
 
 export interface ParsedDataset {
