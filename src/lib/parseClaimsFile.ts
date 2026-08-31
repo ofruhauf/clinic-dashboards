@@ -77,6 +77,21 @@ function normalizePayer(raw: string): string {
   return raw;
 }
 
+// H0038 is the billing code for coaching sessions. Some rows in real exports
+// carry a stale/incorrect appointment_name (e.g. "ADHD evaluation") on an
+// H0038 line, so the procedure code — not the free-text appointment name —
+// is the reliable signal for coaching. Also collapses "Coaching" / "ADHD
+// coaching" / "ADHD Coaching" text variants into one canonical series.
+const COACHING_PROCEDURE_CODES = new Set(['h0038']);
+
+function normalizeVisitType(appointmentNameRaw: string, procedureCodeRaw: string): string {
+  if (COACHING_PROCEDURE_CODES.has(procedureCodeRaw.trim().toLowerCase())) return 'Coaching';
+  const name = appointmentNameRaw.trim();
+  if (!name) return 'Unspecified';
+  if (/coaching/i.test(name)) return 'Coaching';
+  return name;
+}
+
 function resolveAccount(payerNameRaw: unknown, selfPayRaw: unknown): string | null {
   if (toBool(selfPayRaw)) return null;
   const payer = toText(payerNameRaw);
@@ -126,15 +141,17 @@ export async function parseClaimsFile(file: File): Promise<{ rows: AppointmentRo
     const therapistLast = toText(mapped.therapistLast);
     const therapist = [therapistFirst, therapistLast].filter(Boolean).join(' ') || 'Unassigned';
 
+    const procedureCode = toText(mapped.procedureCode);
+
     rows.push({
       patientId,
       patient,
-      title: toText(mapped.title) || 'Unspecified',
+      title: normalizeVisitType(toText(mapped.title), procedureCode),
       therapist,
       account: resolveAccount(mapped.payerName, mapped.selfPay),
       scheduledFor,
       chargeAmount: toChargeDollars(mapped.chargeAmountCents),
-      procedureCode: toText(mapped.procedureCode) || null,
+      procedureCode: procedureCode || null,
       showUp: null,
       encounterId: toText(mapped.encounterId),
     });
@@ -150,36 +167,44 @@ export async function parseClaimsFile(file: File): Promise<{ rows: AppointmentRo
 }
 
 /**
- * Merge freshly parsed rows into an existing dataset, deduping by encounter
+ * Merge freshly parsed rows into an existing dataset, matching by encounter
  * ID so re-uploading an overlapping week's report doesn't double-count.
- * Rows without an encounter ID can't be safely deduped and are always kept.
+ * When an encounter ID recurs, the newly uploaded row REPLACES the existing
+ * one rather than being discarded — claims data for a given encounter can
+ * get corrected between reports (e.g. a visit type or procedure code fixed
+ * in a later week's export), and the most recently uploaded version is the
+ * most current one. Rows without an encounter ID can't be matched and are
+ * always appended.
  */
 export function mergeIntoDataset(
   existing: ParsedDataset | null,
   fileName: string,
   parsed: { rows: AppointmentRow[]; skippedCount: number }
 ): ParsedDataset {
-  const existingIds = new Set(
-    (existing?.rows ?? []).map((r) => r.encounterId).filter((id): id is string => Boolean(id))
-  );
+  const rows = existing ? [...existing.rows] : [];
+  const indexByEncounterId = new Map<string, number>();
+  rows.forEach((row, i) => {
+    if (row.encounterId) indexByEncounterId.set(row.encounterId, i);
+  });
 
-  const newRows: AppointmentRow[] = [];
-  let duplicateCount = 0;
+  let updatedCount = 0;
   for (const row of parsed.rows) {
-    if (row.encounterId && existingIds.has(row.encounterId)) {
-      duplicateCount += 1;
+    const existingIndex = row.encounterId ? indexByEncounterId.get(row.encounterId) : undefined;
+    if (existingIndex !== undefined) {
+      rows[existingIndex] = row;
+      updatedCount += 1;
       continue;
     }
-    if (row.encounterId) existingIds.add(row.encounterId);
-    newRows.push(row);
+    if (row.encounterId) indexByEncounterId.set(row.encounterId, rows.length);
+    rows.push(row);
   }
 
   return {
-    rows: [...(existing?.rows ?? []), ...newRows],
+    rows,
     fileNames: [...(existing?.fileNames ?? []), fileName],
     uploadedAt: new Date().toISOString(),
-    rowCount: (existing?.rows.length ?? 0) + newRows.length,
+    rowCount: rows.length,
     skippedCount: (existing?.skippedCount ?? 0) + parsed.skippedCount,
-    duplicateCount: (existing?.duplicateCount ?? 0) + duplicateCount,
+    duplicateCount: (existing?.duplicateCount ?? 0) + updatedCount,
   };
 }

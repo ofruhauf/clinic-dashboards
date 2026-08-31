@@ -121,7 +121,9 @@ export default function App() {
             {dataset.rowCount.toLocaleString()} claims loaded from{' '}
             {dataset.fileNames.length <= 2 ? dataset.fileNames.join(', ') : `${dataset.fileNames.length} files`}
             {dataset.skippedCount > 0 ? ` · ${dataset.skippedCount} skipped (missing patient/date)` : ''}
-            {dataset.duplicateCount > 0 ? ` · ${dataset.duplicateCount} duplicate claims ignored` : ''}
+            {dataset.duplicateCount > 0
+              ? ` · ${dataset.duplicateCount} claim${dataset.duplicateCount === 1 ? '' : 's'} updated by a later upload`
+              : ''}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

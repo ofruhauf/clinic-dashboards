@@ -44,10 +44,13 @@ also serve from `/clinic-dashboards/` rather than `/`.
    You can select or drop **multiple files at once**, and you can keep
    uploading new files over time (e.g. each week's report) — every upload
    *adds* to the existing dataset rather than replacing it. Claims are
-   deduplicated by `external_encounter_id`, so re-uploading a file that
-   overlaps a previous one (a report that includes a prior week's claims
-   again) won't double-count those rows — they're silently skipped and
-   counted as "duplicate claims ignored" in the header.
+   matched by `external_encounter_id`, so re-uploading a report that
+   overlaps a previous one won't double-count those rows. If the same
+   encounter shows up again with different data (e.g. a visit type or
+   procedure code corrected in a later week's export), the newer upload's
+   version replaces the older one — later reports are treated as more
+   current for a given claim. These are counted as "claims updated by a
+   later upload" in the header.
 2. The **account view** (defaults to Horizon when present, the primary tab)
    shows sessions, revenue, patients, and that account's share of total
    clinic sessions over time. Use the account dropdown to switch to any
@@ -128,6 +131,16 @@ ignored, so no more than necessary ends up sitting in browser storage.
 Dates are read as **DD/MM/YYYY**. Rows missing a patient ID, patient name, or
 a valid service date are skipped and counted in the "skipped" note under the
 header; rows flagged `do_not_bill` are also skipped (counted the same way).
+
+Visit type (the label used for chart series and the "sessions by visit type"
+breakdown) normally comes straight from `appointment_name`, but a
+`procedure_code` of **H0038** always forces the visit type to "Coaching" —
+real exports have shown `appointment_name` mislabeled (e.g. "ADHD
+evaluation") on rows actually billed as coaching, and the procedure code is
+the more reliable signal. Any `appointment_name` containing the word
+"coaching" (regardless of case or prefix) is also normalized to the same
+"Coaching" label, so text variants don't fragment into separate chart
+series.
 
 "New patients" is derived from each patient's earliest service date in the
 full dataset (or, on the account view, their earliest service date under
