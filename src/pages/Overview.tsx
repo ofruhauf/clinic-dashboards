@@ -5,7 +5,7 @@ import AccountMixChart from '../components/charts/AccountMixChart';
 import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
-import { REVENUE_PER_SESSION, computeMetrics, filterByRange, monthsForRange, resolveDateRange } from '../lib/metrics';
+import { computeMetrics, filterByRange, monthsForRange, resolveDateRange } from '../lib/metrics';
 import type { AppointmentRow, DateRangePreset } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
@@ -48,7 +48,7 @@ export default function Overview({ rows, preset }: OverviewProps) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <ChartCard title="Revenue by month" subtitle={`At $${REVENUE_PER_SESSION}/session`}>
+        <ChartCard title="Revenue by month" subtitle="Actual billed amount">
           <SimpleBarChart
             data={metrics.revenueByMonth}
             xKey="label"

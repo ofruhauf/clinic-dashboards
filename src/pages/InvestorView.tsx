@@ -4,13 +4,7 @@ import HeroStat from '../components/HeroStat';
 import HeroAreaChart from '../components/charts/HeroAreaChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
-import {
-  REVENUE_PER_SESSION,
-  computeMetrics,
-  computeShareOfTotal,
-  excludeCurrentMonth,
-  monthsForRange,
-} from '../lib/metrics';
+import { computeMetrics, computeShareOfTotal, excludeCurrentMonth, monthsForRange } from '../lib/metrics';
 import type { AppointmentRow } from '../lib/types';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 
@@ -30,14 +24,6 @@ const ACCOUNT_LAUNCH_DATES: Record<string, string> = {
   horizon: '2026-06-01',
 };
 
-// Actual billed revenue for months where it's known, overriding the flat
-// $140/session estimate used elsewhere — real per-payer reimbursement rates
-// differ from the blended clinic-wide estimate. Add each month's real figure
-// here as billing data comes in; unlisted months keep the flat estimate.
-const ACCOUNT_REVENUE_OVERRIDES: Record<string, Record<string, number>> = {
-  horizon: { '2026-08': 6300 },
-};
-
 // Year-end ARR target per account. Used only to compute and disclose the
 // sustained month-over-month growth rate it implies from the latest known
 // month — this is a stated goal with its assumption shown, not an
@@ -54,18 +40,9 @@ const ACCOUNT_ORGANIC_NOTE: Record<string, string> = {
 const PIPELINE_TARGETS = ['Highmark', 'BCBS NC', 'IDX'];
 const PIPELINE_COVERED_LIVES = '15M+';
 
-interface RevenuePoint {
-  month: string;
-  label: string;
-  revenue: number;
-  isActual: boolean;
-  [key: string]: string | number | boolean;
-}
-
 export default function InvestorView({ rows, account }: InvestorViewProps) {
   const accountKey = account.toLowerCase();
   const launchDate = ACCOUNT_LAUNCH_DATES[accountKey];
-  const revenueOverrides = ACCOUNT_REVENUE_OVERRIDES[accountKey];
   const eoyArrTarget = ACCOUNT_EOY_ARR_TARGET[accountKey];
   const organicNote = ACCOUNT_ORGANIC_NOTE[accountKey];
   const launchCutoff = useMemo(() => (launchDate ? new Date(`${launchDate}T00:00:00Z`) : null), [launchDate]);
@@ -83,20 +60,6 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
   const metrics = useMemo(() => computeMetrics(accountRows, months, accountRows), [accountRows, months]);
   const share = useMemo(() => computeShareOfTotal(accountRows, rows, months), [accountRows, rows, months]);
 
-  // Substitute real billed revenue where known; every other month keeps the
-  // flat $140/session estimate used across the rest of the dashboard.
-  const revenueByMonth: RevenuePoint[] = useMemo(
-    () =>
-      metrics.revenueByMonth.map((p) => ({
-        month: p.month,
-        label: p.label,
-        revenue: revenueOverrides?.[p.month] ?? p.revenue,
-        isActual: Boolean(revenueOverrides?.[p.month]),
-      })),
-    [metrics.revenueByMonth, revenueOverrides]
-  );
-  const totalRevenueToDate = useMemo(() => revenueByMonth.reduce((sum, p) => sum + p.revenue, 0), [revenueByMonth]);
-
   const stats = useMemo(() => {
     const completeMonths = excludeCurrentMonth(months);
     const referenceMonths = completeMonths.length > 0 ? completeMonths : months;
@@ -104,12 +67,12 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
 
     const lastKey = referenceMonths[referenceMonths.length - 1];
     const lastSessions = metrics.sessionsByMonth.find((p) => p.month === lastKey);
-    const lastRevenue = revenueByMonth.find((p) => p.month === lastKey);
+    const lastRevenue = metrics.revenueByMonth.find((p) => p.month === lastKey);
 
     const compareIdx = Math.max(0, referenceMonths.length - 1 - COMPARE_MONTHS_BACK);
     const compareKey = referenceMonths[compareIdx];
     const actualMonthsBack = referenceMonths.length - 1 - compareIdx;
-    const compareRevenue = revenueByMonth.find((p) => p.month === compareKey);
+    const compareRevenue = metrics.revenueByMonth.find((p) => p.month === compareKey);
 
     const revenueGrowthPct =
       actualMonthsBack > 0 && compareRevenue && compareRevenue.revenue > 0 && lastRevenue
@@ -120,7 +83,7 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
     const monthsSinceFirst = months.indexOf(lastKey) + 1;
 
     let running = 0;
-    const cumulativeRevenue = revenueByMonth.map((p) => {
+    const cumulativeRevenue = metrics.revenueByMonth.map((p) => {
       running += p.revenue;
       return { month: p.month, label: p.label, value: running };
     });
@@ -147,7 +110,6 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
       lastLabel: lastSessions?.label ?? firstPoint.label,
       lastSessionsCount: (lastSessions?.total as number) ?? firstPoint.total,
       lastRevenueValue: lastRevenue?.revenue ?? 0,
-      lastRevenueIsActual: lastRevenue?.isActual ?? false,
       arrRunRate: lastRevenue ? lastRevenue.revenue * 12 : null,
       revenueGrowthPct,
       compareLabel: compareRevenue?.label ?? firstPoint.label,
@@ -159,7 +121,7 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
       cumulativeRevenue,
       eoyProjection,
     };
-  }, [metrics, months, revenueByMonth, eoyArrTarget]);
+  }, [metrics, months, eoyArrTarget]);
 
   if (accountRows.length === 0 || !stats) {
     return (
@@ -198,7 +160,7 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
         <HeroStat
           label="ARR run-rate"
           value={stats.arrRunRate == null ? '—' : formatCurrency(stats.arrRunRate)}
-          sub={`Based on ${stats.lastLabel} pace${stats.lastRevenueIsActual ? ' — actual billed revenue' : ' — estimated'}`}
+          sub={`Based on ${stats.lastLabel} pace — actual billed revenue`}
           accent={ACCENT}
         />
         <HeroStat
@@ -213,7 +175,7 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
         />
         <HeroStat
           label="Revenue to date"
-          value={formatCurrency(totalRevenueToDate)}
+          value={formatCurrency(metrics.revenue)}
           sub={`${metrics.totalSessions.toLocaleString()} sessions · ${metrics.uniquePatients.toLocaleString()} patients`}
           accent={ACCENT}
         />
@@ -263,9 +225,9 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <ChartCard title="Monthly revenue" subtitle="Recent momentum">
+        <ChartCard title="Monthly revenue" subtitle="Actual billed amount">
           <SimpleBarChart
-            data={revenueByMonth}
+            data={metrics.revenueByMonth}
             xKey="label"
             yKey="revenue"
             color={ACCENT}
@@ -331,10 +293,8 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
 
       <p style={{ fontSize: 11.5, color: '#898781', borderTop: '1px solid rgba(11,11,11,0.08)', paddingTop: 12 }}>
         As of {stats.lastLabel} · {metrics.totalSessions.toLocaleString()} total sessions ·{' '}
-        {metrics.uniquePatients.toLocaleString()} patients · Source: Agave Health scheduling export.{' '}
-        {stats.lastRevenueIsActual
-          ? `${stats.lastLabel} revenue (${formatCurrency(stats.lastRevenueValue)}) is actual billed revenue; other months are estimated at a flat $${REVENUE_PER_SESSION}/session pending full billing reconciliation.`
-          : `Revenue is estimated at a flat $${REVENUE_PER_SESSION}/session (no billing data in the export) — illustrative, not billed revenue.`}
+        {metrics.uniquePatients.toLocaleString()} patients · Source: Agave Health weekly claims reports. Revenue is
+        the actual billed amount per claim — not an estimate.
         {launchDate && (
           <>
             {' '}

@@ -5,7 +5,7 @@ import QueryBox from './components/QueryBox';
 import Overview from './pages/Overview';
 import AccountView from './pages/AccountView';
 import InvestorView from './pages/InvestorView';
-import { parseExcelFile } from './lib/parseExcel';
+import { mergeIntoDataset, parseClaimsFile } from './lib/parseClaimsFile';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
 import { listAccounts, resolveDateRange } from './lib/metrics';
 import type { QueryContext } from './lib/query';
@@ -46,18 +46,30 @@ export default function App() {
     };
   }, [dataset, tab, selectedAccount, preset, accounts]);
 
-  async function handleFile(file: File) {
+  async function handleFiles(files: File[]) {
+    if (files.length === 0) return;
     setBusy(true);
     setError(null);
-    try {
-      const parsed = await parseExcelFile(file);
-      setDataset(parsed);
-      saveDataset(parsed);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not parse this file.');
-    } finally {
-      setBusy(false);
+
+    let next = dataset;
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        const parsed = await parseClaimsFile(file);
+        next = mergeIntoDataset(next, file.name, parsed);
+      } catch (e) {
+        failures.push(`${file.name}: ${e instanceof Error ? e.message : 'could not parse'}`);
+      }
     }
+
+    if (next && next !== dataset) {
+      setDataset(next);
+      saveDataset(next);
+    }
+    if (failures.length > 0) {
+      setError(failures.join('  ·  '));
+    }
+    setBusy(false);
   }
 
   function handleReset() {
@@ -81,9 +93,10 @@ export default function App() {
         <div style={{ maxWidth: 520, width: '100%' }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agave Health — Growth Dashboard</h1>
           <p style={{ fontSize: 14, color: '#52514e', marginBottom: 20 }}>
-            Upload your appointments export to see clinic growth, sessions, and new-patient trends.
+            Upload your weekly claims reports to see clinic growth, sessions, and revenue trends. Drop in as many
+            files at once as you like — future uploads add to what's already here.
           </p>
-          <UploadPanel onFile={handleFile} busy={busy} error={error} />
+          <UploadPanel onFiles={handleFiles} busy={busy} error={error} />
         </div>
       </div>
     );
@@ -105,8 +118,10 @@ export default function App() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>Agave Health — Growth Dashboard</h1>
           <p style={{ fontSize: 12.5, color: '#898781', marginTop: 2 }}>
-            {dataset.rowCount.toLocaleString()} appointments loaded from {dataset.fileName}
-            {dataset.skippedCount > 0 ? ` (${dataset.skippedCount} rows skipped — missing patient/date)` : ''}
+            {dataset.rowCount.toLocaleString()} claims loaded from{' '}
+            {dataset.fileNames.length <= 2 ? dataset.fileNames.join(', ') : `${dataset.fileNames.length} files`}
+            {dataset.skippedCount > 0 ? ` · ${dataset.skippedCount} skipped (missing patient/date)` : ''}
+            {dataset.duplicateCount > 0 ? ` · ${dataset.duplicateCount} duplicate claims ignored` : ''}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -138,15 +153,16 @@ export default function App() {
               border: '1px solid rgba(42,120,214,0.35)',
             }}
           >
-            {busy ? 'Uploading…' : 'Replace data'}
+            {busy ? 'Uploading…' : 'Upload files'}
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
+              multiple
               style={{ display: 'none' }}
               disabled={busy}
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
+                const files = Array.from(e.target.files ?? []);
+                if (files.length > 0) handleFiles(files);
                 e.target.value = '';
               }}
             />

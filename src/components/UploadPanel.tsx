@@ -1,22 +1,22 @@
 import { useCallback, useRef, useState } from 'react';
 
 interface UploadPanelProps {
-  onFile: (file: File) => void;
+  onFiles: (files: File[]) => void;
   busy: boolean;
   error: string | null;
   compact?: boolean;
 }
 
-export default function UploadPanel({ onFile, busy, error, compact }: UploadPanelProps) {
+export default function UploadPanel({ onFiles, busy, error, compact }: UploadPanelProps) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
-      const file = files?.[0];
-      if (file) onFile(file);
+      const list = Array.from(files ?? []);
+      if (list.length > 0) onFiles(list);
     },
-    [onFile]
+    [onFiles]
   );
 
   return (
@@ -51,14 +51,18 @@ export default function UploadPanel({ onFile, busy, error, compact }: UploadPane
         ref={inputRef}
         type="file"
         accept=".xlsx,.xls,.csv"
+        multiple
         style={{ display: 'none' }}
-        onChange={(e) => handleFiles(e.target.files)}
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          e.target.value = '';
+        }}
       />
       <p style={{ fontSize: compact ? 15 : 18, fontWeight: 600, color: '#0b0b0b' }}>
-        {busy ? 'Parsing spreadsheet…' : 'Drop your data export here, or click to choose a file'}
+        {busy ? 'Parsing claims…' : 'Drop your weekly claims reports here, or click to choose files'}
       </p>
       <p style={{ fontSize: 13, color: '#898781', marginTop: 6 }}>
-        .xlsx or .csv with columns like user, title, therapist, insurance, scheduledFor, showUp, reported
+        .csv or .xlsx claims exports — select or drop as many files at once as you like
       </p>
       {error && (
         <p style={{ fontSize: 13, color: '#d03b3b', marginTop: 12, fontWeight: 600 }}>{error}</p>

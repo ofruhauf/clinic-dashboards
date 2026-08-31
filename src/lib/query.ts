@@ -173,7 +173,7 @@ function activePatientsByMonth(rows: AppointmentRow[], months: string[]): QueryC
     const m = monthKey(row.scheduledFor);
     if (!monthSet.has(m)) continue;
     if (!byMonth.has(m)) byMonth.set(m, new Set());
-    byMonth.get(m)!.add(row.patient);
+    byMonth.get(m)!.add(row.patientId);
   }
   return months.map((m) => ({ label: monthLabel(m), value: byMonth.get(m)?.size ?? 0 }));
 }
@@ -347,6 +347,6 @@ export const EXAMPLE_QUERIES = [
   'What is last 3 months MoM growth?',
   'Revenue last 6 months',
   'New patients this year',
-  'Horizon show-up rate',
+  'Horizon revenue this year',
 ];
 

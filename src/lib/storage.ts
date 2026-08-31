@@ -1,10 +1,12 @@
 import type { AppointmentRow, ParsedDataset } from './types';
 
-const STORAGE_KEY = 'agave-dashboard:dataset:v1';
+// v2: switched from scheduling-export rows to claims rows (different shape) —
+// bumped so any old-format data cached in a browser is cleanly ignored
+// rather than loaded and misread.
+const STORAGE_KEY = 'agave-dashboard:dataset:v2';
 
-interface SerializedRow extends Omit<AppointmentRow, 'scheduledFor' | 'createdAt'> {
+interface SerializedRow extends Omit<AppointmentRow, 'scheduledFor'> {
   scheduledFor: string;
-  createdAt: string | null;
 }
 
 interface SerializedDataset extends Omit<ParsedDataset, 'rows'> {
@@ -17,7 +19,6 @@ export function saveDataset(dataset: ParsedDataset): void {
     rows: dataset.rows.map((row) => ({
       ...row,
       scheduledFor: row.scheduledFor.toISOString(),
-      createdAt: row.createdAt ? row.createdAt.toISOString() : null,
     })),
   };
   try {
@@ -37,7 +38,6 @@ export function loadDataset(): ParsedDataset | null {
       rows: parsed.rows.map((row) => ({
         ...row,
         scheduledFor: new Date(row.scheduledFor),
-        createdAt: row.createdAt ? new Date(row.createdAt) : null,
       })),
     };
   } catch {

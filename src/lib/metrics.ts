@@ -1,7 +1,6 @@
 import type { AppointmentRow, DateRange } from './types';
 
-export const SELF_PAY_LABEL = 'Self-pay / Other';
-export const REVENUE_PER_SESSION = 140;
+export const SELF_PAY_LABEL = 'Self-pay';
 const OTHER_LABEL = 'Other';
 const MAX_SERIES = 4;
 const MAX_BAR_CATEGORIES = 8;
@@ -119,13 +118,13 @@ export function listAccounts(rows: AppointmentRow[]): { name: string; sessions: 
     .sort((a, b) => b.sessions - a.sessions);
 }
 
-/** Earliest scheduled appointment per patient, across the given rows. */
+/** Earliest scheduled appointment per patient (keyed by patientId), across the given rows. */
 export function firstAppointmentByPatient(rows: AppointmentRow[]): Map<string, Date> {
   const map = new Map<string, Date>();
   for (const row of rows) {
-    const existing = map.get(row.patient);
+    const existing = map.get(row.patientId);
     if (!existing || row.scheduledFor < existing) {
-      map.set(row.patient, row.scheduledFor);
+      map.set(row.patientId, row.scheduledFor);
     }
   }
   return map;
@@ -176,7 +175,7 @@ export function computeMetrics(
   scopeRows: AppointmentRow[] = rows
 ): DashboardMetrics {
   const totalSessions = rows.length;
-  const patientSet = new Set(rows.map((r) => r.patient));
+  const patientSet = new Set(rows.map((r) => r.patientId));
   const uniquePatients = patientSet.size;
 
   const shown = rows.filter((r) => r.showUp !== null);
@@ -189,18 +188,24 @@ export function computeMetrics(
   const seriesKeys = Array.from(keptTitles);
 
   const byMonth = new Map<string, MonthlySeriesPoint>();
+  const revenueByMonthMap = new Map<string, number>();
   for (const m of months) {
     const point: MonthlySeriesPoint = { month: m, label: monthLabel(m), total: 0 };
     for (const key of seriesKeys) point[key] = 0;
     byMonth.set(m, point);
+    revenueByMonthMap.set(m, 0);
   }
   for (const row of rows) {
     const m = monthKey(row.scheduledFor);
     const point = byMonth.get(m);
-    if (!point) continue;
-    const seriesKey = keptTitles.has(row.title) ? row.title : OTHER_LABEL;
-    point[seriesKey] = ((point[seriesKey] as number) ?? 0) + 1;
-    point.total = (point.total as number) + 1;
+    if (point) {
+      const seriesKey = keptTitles.has(row.title) ? row.title : OTHER_LABEL;
+      point[seriesKey] = ((point[seriesKey] as number) ?? 0) + 1;
+      point.total = (point.total as number) + 1;
+    }
+    if (revenueByMonthMap.has(m)) {
+      revenueByMonthMap.set(m, revenueByMonthMap.get(m)! + row.chargeAmount);
+    }
   }
   const sessionsByMonth = months.map((m) => byMonth.get(m)!);
 
@@ -237,9 +242,10 @@ export function computeMetrics(
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Exclude the current (and any future) month from the trend — appointment data
-  // routinely includes upcoming scheduled visits, so an in-progress month reads
-  // as a misleading drop-off next to a completed one.
+  // Exclude the current (and any future) month from the trend — a claims report
+  // for the current month is typically still incomplete (not all of the week's
+  // claims have been submitted/processed yet), so an in-progress month reads as
+  // a misleading drop-off next to a completed one.
   const completeMonthKeys = new Set(excludeCurrentMonth(months));
   const completeMonths = sessionsByMonth.filter((m) => completeMonthKeys.has(m.month));
   const lastTwo = completeMonths.slice(-2);
@@ -248,11 +254,11 @@ export function computeMetrics(
       ? ((lastTwo[1].total as number) - (lastTwo[0].total as number)) / (lastTwo[0].total as number)
       : null;
 
-  const revenue = totalSessions * REVENUE_PER_SESSION;
-  const revenueByMonth = sessionsByMonth.map((m) => ({
-    month: m.month,
-    label: m.label,
-    revenue: (m.total as number) * REVENUE_PER_SESSION,
+  const revenue = rows.reduce((sum, r) => sum + r.chargeAmount, 0);
+  const revenueByMonth = months.map((m) => ({
+    month: m,
+    label: monthLabel(m),
+    revenue: revenueByMonthMap.get(m) ?? 0,
   }));
 
   return {

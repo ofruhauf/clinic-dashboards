@@ -1,10 +1,12 @@
 # Agave Health — Growth Dashboard
 
-A browser-based dashboard for Agave Health's growth, sessions, and new-patient
+A browser-based dashboard for Agave Health's growth, sessions, and revenue
 metrics, with a dedicated view for the Horizon account. No backend or
-database — you upload an appointments export (Excel or CSV) and the dashboard
+database — you upload weekly claims reports (Excel or CSV) and the dashboard
 updates entirely in your browser. The uploaded data stays on your machine
 (saved to `localStorage`) so it's still there next time you open the page.
+Revenue shown throughout the app is the actual billed amount per claim, not
+an estimate.
 
 ## Running it
 
@@ -38,11 +40,19 @@ also serve from `/clinic-dashboards/` rather than `/`.
 
 ## Using the dashboard
 
-1. Open the app and drop in your appointments export (`.xlsx` or `.csv`).
+1. Open the app and drop in your weekly claims report(s) (`.xlsx` or `.csv`).
+   You can select or drop **multiple files at once**, and you can keep
+   uploading new files over time (e.g. each week's report) — every upload
+   *adds* to the existing dataset rather than replacing it. Claims are
+   deduplicated by `external_encounter_id`, so re-uploading a file that
+   overlaps a previous one (a report that includes a prior week's claims
+   again) won't double-count those rows — they're silently skipped and
+   counted as "duplicate claims ignored" in the header.
 2. The **account view** (defaults to Horizon when present, the primary tab)
-   shows sessions, revenue, patients, show-up rate, and that account's share
-   of total clinic sessions over time. Use the account dropdown to switch to
-   any other payer in your data.
+   shows sessions, revenue, patients, and that account's share of total
+   clinic sessions over time. Use the account dropdown to switch to any
+   other payer in your data. (Show-up rate isn't in claims data, so it
+   displays as "—".)
 3. **Investor View** is a share-ready, single-account pitch page: a headline
    ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), four hero stats (ARR
    run-rate, revenue growth MoM, revenue to date, time to traction), a large
@@ -63,10 +73,6 @@ also serve from `/clinic-dashboards/` rather than `/`.
    express on its own — edit these directly as the real story changes:
    - `ACCOUNT_LAUNCH_DATES` — story-start date, when it's later than the
      first row in the data (e.g. a pre-launch pilot session).
-   - `ACCOUNT_REVENUE_OVERRIDES` — actual billed revenue per month, keyed by
-     `YYYY-MM`, overriding the flat $140/session estimate for months where
-     the real number is known. The footer discloses which months are actual
-     vs. estimated.
    - `ACCOUNT_EOY_ARR_TARGET` — a stated year-end ARR goal; the page computes
      and discloses the sustained month-over-month growth rate that goal
      implies from the latest known month, rather than presenting the target
@@ -76,13 +82,12 @@ also serve from `/clinic-dashboards/` rather than `/`.
    - `PIPELINE_TARGETS` / `PIPELINE_COVERED_LIVES` — the expansion pipeline
      badges shown in the "playbook" section.
 4. **Clinic overview** shows the same shape of metrics clinic-wide: sessions,
-   revenue, unique/new patients, show-up rate, month-over-month growth,
-   session mix by visit type, revenue by month, and account (payer) mix.
-   Revenue is estimated at a flat **$140 per session** — there's no revenue
-   column in the raw data, so this is `sessions × $140`, not a billed amount.
+   revenue, unique/new patients, month-over-month growth, session mix by
+   visit type, revenue by month, and account (payer) mix. Revenue is the
+   real per-claim billed amount summed from the uploaded reports.
 5. The **"Ask about your data"** box at the top answers one-off questions —
    e.g. "what is last 3 months MoM growth?", "revenue last 6 months",
-   "Horizon show-up rate" — with a short text answer and, where a trend
+   "Horizon revenue this year" — with a short text answer and, where a trend
    applies, a small chart. It's a lightweight local pattern matcher (metric +
    time range + optional account name), not a general-purpose LLM: it
    recognizes sessions, revenue, new/active/cumulative patients, show-up
@@ -92,34 +97,42 @@ also serve from `/clinic-dashboards/` rather than `/`.
    out a metric, time range, or scope and it falls back to the current tab's
    filters. Nothing is sent anywhere — it runs entirely against the data
    already in your browser.
-6. Use **Replace data** to upload a new export at any time — it fully
-   replaces the current dataset. **Clear** removes the stored data and
+6. Use **Upload files** (header, top right) to add more claims reports at any
+   time — new files accumulate into the existing dataset (see dedup note
+   above), they don't replace it. **Clear** removes all stored data and
    returns to the upload screen.
 
 ### Expected columns
 
-The parser matches headers case-insensitively and tolerates a few common
-variants. At minimum it needs a patient name and an appointment date:
+The parser is built for weekly claims/billing exports and matches headers
+case-insensitively (spaces/underscores/hyphens are ignored), so
+`date_of_service` and `Date Of Service` both resolve the same way. Only a
+subset of the ~115 columns a real claims export can contain are read —
+everything else (diagnosis codes, date of birth, address, and other PHI) is
+ignored, so no more than necessary ends up sitting in browser storage.
 
-| Column | Aliases | Required |
-|---|---|---|
-| `user` | patient | yes |
-| `scheduledFor` | scheduled, date | yes |
-| `title` | visitType | no (defaults to "Unspecified") |
-| `therapist` | provider | no (defaults to "Unassigned") |
-| `insurance` | account, payer | no (blank = "Self-pay / Other") |
-| `showUp` | | no (Yes/No) |
-| `reported` | | no (Yes/No) |
-| `paymentMethod` | | no |
-| `status` | | no |
-| `createdAt` | | no |
+| Column | Required |
+|---|---|
+| `external_encounter_id` | no, but strongly recommended — without it, rows can't be deduped across uploads |
+| `external_patient_id` | yes — stable patient identity |
+| `date_of_service` (`DD/MM/YYYY`) | yes |
+| `patient_first_name` / `patient_last_name` | yes (display name) |
+| `charge_amount_cents` | no (defaults to $0 if missing) |
+| `payer_name` | no (blank or `patient_self_pay` = Yes → "Self-pay") |
+| `patient_self_pay` (Yes/No) | no |
+| `appointment_name` | no (visit type — eval, therapy, coaching, etc.; defaults to "Unspecified") |
+| `procedure_code` | no |
+| `rendering_provider_first_name` / `_last_name` | no (defaults to "Unassigned") |
+| `do_not_bill` (Yes/No) | no — rows flagged Yes are excluded entirely |
 
-Rows missing a patient name or a valid appointment date are skipped and
-counted in the "rows skipped" note under the header.
+Dates are read as **DD/MM/YYYY**. Rows missing a patient ID, patient name, or
+a valid service date are skipped and counted in the "skipped" note under the
+header; rows flagged `do_not_bill` are also skipped (counted the same way).
 
-"New patients" is derived from each patient's earliest appointment date in
-the full dataset (or, on the account view, their earliest appointment under
-that specific account) — there's no separate new/returning column required.
+"New patients" is derived from each patient's earliest service date in the
+full dataset (or, on the account view, their earliest service date under
+that specific account/payer), keyed by `external_patient_id` — there's no
+separate new/returning column required.
 
 ## Tech
 

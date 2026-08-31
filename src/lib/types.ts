@@ -1,22 +1,23 @@
 export interface AppointmentRow {
-  patient: string;
-  title: string;
-  therapist: string;
-  account: string | null; // "insurance" column; null = self-pay / other
-  scheduledFor: Date;
-  paymentMethod: string | null;
-  status: string;
-  showUp: boolean | null;
-  reported: boolean | null;
-  createdAt: Date | null;
+  patientId: string; // stable external_patient_id — used for all patient dedup/counting
+  patient: string; // display name
+  title: string; // appointment_name (visit type — evaluation, therapy, coaching, etc.)
+  therapist: string; // rendering provider
+  account: string | null; // payer name; null = self-pay
+  scheduledFor: Date; // date_of_service
+  chargeAmount: number; // actual billed amount, in dollars
+  procedureCode: string | null;
+  showUp: boolean | null; // not present in claims data; always null, kept so show-up-rate code degrades gracefully
+  encounterId: string; // external_encounter_id — used to dedupe across uploaded files
 }
 
 export interface ParsedDataset {
   rows: AppointmentRow[];
-  fileName: string;
-  uploadedAt: string; // ISO
+  fileNames: string[]; // every file that has contributed rows, in upload order
+  uploadedAt: string; // ISO, most recent upload
   rowCount: number;
-  skippedCount: number;
+  skippedCount: number; // cumulative rows skipped (missing patient/date) across all uploads
+  duplicateCount: number; // cumulative rows skipped as duplicates (same encounter already loaded)
 }
 
 export type DateRangePreset =
