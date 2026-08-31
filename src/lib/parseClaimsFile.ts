@@ -84,8 +84,12 @@ function normalizePayer(raw: string): string {
 // coaching" / "ADHD Coaching" text variants into one canonical series.
 const COACHING_PROCEDURE_CODES = new Set(['h0038']);
 
+function isCoachingProcedureCode(procedureCode: string | null): boolean {
+  return COACHING_PROCEDURE_CODES.has((procedureCode ?? '').trim().toLowerCase());
+}
+
 function normalizeVisitType(appointmentNameRaw: string, procedureCodeRaw: string): string {
-  if (COACHING_PROCEDURE_CODES.has(procedureCodeRaw.trim().toLowerCase())) return 'Coaching';
+  if (isCoachingProcedureCode(procedureCodeRaw)) return 'Coaching';
   const name = appointmentNameRaw.trim();
   if (!name) return 'Unspecified';
   if (/coaching/i.test(name)) return 'Coaching';
@@ -169,12 +173,21 @@ export async function parseClaimsFile(file: File): Promise<{ rows: AppointmentRo
 /**
  * Merge freshly parsed rows into an existing dataset, matching by encounter
  * ID so re-uploading an overlapping week's report doesn't double-count.
- * When an encounter ID recurs, the newly uploaded row REPLACES the existing
- * one rather than being discarded — claims data for a given encounter can
- * get corrected between reports (e.g. a visit type or procedure code fixed
- * in a later week's export), and the most recently uploaded version is the
- * most current one. Rows without an encounter ID can't be matched and are
- * always appended.
+ * When an encounter ID recurs, the newly uploaded row normally REPLACES the
+ * existing one — claims data for a given encounter can get corrected between
+ * reports (e.g. a visit type or procedure code fixed in a later week's
+ * export). Rows without an encounter ID can't be matched and are always
+ * appended.
+ *
+ * One exception: uploads aren't guaranteed to happen in chronological report
+ * order (someone may re-drop an old file after a newer one), so "whichever
+ * upload came last" isn't a safe recency signal on its own. Real exports
+ * have shown the same encounter first billed under a generic eval/therapy
+ * code, then corrected to H0038 (coaching) in a later report — never the
+ * reverse. So once an encounter is known to be a coaching claim, a
+ * non-coaching version of it is treated as the stale pre-correction state
+ * and never overwrites it, regardless of which file was uploaded more
+ * recently.
  */
 export function mergeIntoDataset(
   existing: ParsedDataset | null,
@@ -191,7 +204,11 @@ export function mergeIntoDataset(
   for (const row of parsed.rows) {
     const existingIndex = row.encounterId ? indexByEncounterId.get(row.encounterId) : undefined;
     if (existingIndex !== undefined) {
-      rows[existingIndex] = row;
+      const existingRow = rows[existingIndex];
+      const isStaleDowngrade = isCoachingProcedureCode(existingRow.procedureCode) && !isCoachingProcedureCode(row.procedureCode);
+      if (!isStaleDowngrade) {
+        rows[existingIndex] = row;
+      }
       updatedCount += 1;
       continue;
     }

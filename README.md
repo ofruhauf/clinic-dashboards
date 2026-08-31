@@ -47,10 +47,16 @@ also serve from `/clinic-dashboards/` rather than `/`.
    matched by `external_encounter_id`, so re-uploading a report that
    overlaps a previous one won't double-count those rows. If the same
    encounter shows up again with different data (e.g. a visit type or
-   procedure code corrected in a later week's export), the newer upload's
-   version replaces the older one — later reports are treated as more
-   current for a given claim. These are counted as "claims updated by a
-   later upload" in the header.
+   procedure code corrected in a later week's export), the newly uploaded
+   version normally replaces the older one — with one exception: an
+   encounter already recorded as a coaching claim (`procedure_code`
+   `H0038`) never gets overwritten by a non-coaching version of itself,
+   *no matter which file that came from or when it was uploaded*. Real
+   exports show claims getting corrected to H0038 in a later report, never
+   the other way around, so this protects a corrected claim from reverting
+   if you happen to (re-)upload an older report afterward. These matches
+   are counted as "claims updated by a later upload" in the header, whether
+   or not the row's data actually changed.
 2. The **account view** (defaults to Horizon when present, the primary tab)
    shows sessions, revenue, patients, and that account's share of total
    clinic sessions over time. Use the account dropdown to switch to any
