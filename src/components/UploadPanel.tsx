@@ -50,7 +50,7 @@ export default function UploadPanel({ onFiles, busy, error, compact }: UploadPan
       <input
         ref={inputRef}
         type="file"
-        accept=".xlsx,.xls,.csv"
+        accept=".xlsx,.xls,.csv,.json"
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
@@ -62,7 +62,8 @@ export default function UploadPanel({ onFiles, busy, error, compact }: UploadPan
         {busy ? 'Parsing claims…' : 'Drop your weekly claims reports here, or click to choose files'}
       </p>
       <p style={{ fontSize: 13, color: '#898781', marginTop: 6 }}>
-        .csv or .xlsx claims exports — select or drop as many files at once as you like
+        .csv or .xlsx claims exports, or a .json snapshot shared by a colleague — select or drop as many files at
+        once as you like
       </p>
       {error && (
         <p style={{ fontSize: 13, color: '#d03b3b', marginTop: 12, fontWeight: 600 }}>{error}</p>

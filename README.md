@@ -105,6 +105,30 @@ also serve from `/clinic-dashboards/` rather than `/`.
    above), they don't replace it. **Clear** removes all stored data and
    returns to the upload screen.
 
+### Sharing the dashboard with someone else
+
+The app has no backend and no login — data lives only in the browser that
+uploaded it, so opening the live URL on a different computer shows an empty
+upload screen, not your data. To share what you're seeing with a co-founder
+or colleague:
+
+1. Click **Share with someone** (header, top right) — it downloads a
+   `.json` snapshot file containing everything currently loaded.
+2. Send them that file (email, Slack, AirDrop, whatever).
+3. They open the same dashboard URL and drop the file into the upload
+   panel, exactly like a claims report. It loads instantly into an
+   identical dashboard — same numbers, same charts, no upload of the
+   original claims files required.
+
+The snapshot merges in by encounter ID just like any other file, so it's
+safe to drop into a dashboard that already has other data loaded, and it
+plays nicely with re-uploading it later. To keep someone in sync going
+forward, either re-share an updated snapshot after each week's upload, or
+just have both people upload the same weekly claims reports independently —
+both approaches produce the same result. There's no shared/live view; each
+side's data is a separate copy in their own browser until the next
+snapshot or file is exchanged.
+
 ### Expected columns
 
 The parser is built for weekly claims/billing exports and matches headers

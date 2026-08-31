@@ -6,6 +6,7 @@ import Overview from './pages/Overview';
 import AccountView from './pages/AccountView';
 import InvestorView from './pages/InvestorView';
 import { mergeIntoDataset, parseClaimsFile } from './lib/parseClaimsFile';
+import { downloadSnapshot, isSnapshotFile, parseSnapshotFile } from './lib/snapshot';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
 import { listAccounts, resolveDateRange } from './lib/metrics';
 import type { QueryContext } from './lib/query';
@@ -55,7 +56,7 @@ export default function App() {
     const failures: string[] = [];
     for (const file of files) {
       try {
-        const parsed = await parseClaimsFile(file);
+        const parsed = isSnapshotFile(file) ? await parseSnapshotFile(file) : await parseClaimsFile(file);
         next = mergeIntoDataset(next, file.name, parsed);
       } catch (e) {
         failures.push(`${file.name}: ${e instanceof Error ? e.message : 'could not parse'}`);
@@ -94,7 +95,8 @@ export default function App() {
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agave Health — Growth Dashboard</h1>
           <p style={{ fontSize: 14, color: '#52514e', marginBottom: 20 }}>
             Upload your weekly claims reports to see clinic growth, sessions, and revenue trends. Drop in as many
-            files at once as you like — future uploads add to what's already here.
+            files at once as you like — future uploads add to what's already here. Got a snapshot file (.json) from
+            a colleague instead? Drop that in too — it loads the same way.
           </p>
           <UploadPanel onFiles={handleFiles} busy={busy} error={error} />
         </div>
@@ -144,6 +146,22 @@ export default function App() {
               Download as PDF
             </button>
           )}
+          <button
+            onClick={() => downloadSnapshot(dataset)}
+            title="Downloads a .json file with everything currently loaded — send it to a colleague and have them drop it into their own Upload files panel to see the same dashboard."
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#52514e',
+              background: 'transparent',
+              border: '1px solid rgba(11,11,11,0.15)',
+              borderRadius: 8,
+              padding: '7px 12px',
+              cursor: 'pointer',
+            }}
+          >
+            Share with someone
+          </button>
           <label
             style={{
               fontSize: 12.5,
@@ -158,7 +176,7 @@ export default function App() {
             {busy ? 'Uploading…' : 'Upload files'}
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.xls,.csv,.json"
               multiple
               style={{ display: 'none' }}
               disabled={busy}
