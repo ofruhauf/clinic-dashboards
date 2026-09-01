@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import ChartCard from '../components/ChartCard';
 import KpiCard from '../components/KpiCard';
+import CustomizeStatsButton from '../components/CustomizeStatsButton';
 import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
@@ -14,6 +15,7 @@ import {
 import type { AppointmentRow, DateRangePreset, RegisteredPatientRow } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
+import { useStatVisibility } from '../lib/useStatVisibility';
 
 interface AccountViewProps {
   rows: AppointmentRow[];
@@ -40,6 +42,50 @@ export default function AccountView({ rows, registeredPatients, account, preset 
 
   const latestShare = share.length > 0 ? share[share.length - 1].sharePct : null;
 
+  const { hidden, toggle } = useStatVisibility('account');
+
+  const statCards = useMemo(() => {
+    const cards: { key: string; label: string; node: ReactNode }[] = [
+      { key: 'sessions', label: 'Sessions', node: <KpiCard label={`${account} sessions`} value={metrics.totalSessions.toLocaleString()} /> },
+      { key: 'revenue', label: 'Revenue', node: <KpiCard label={`${account} revenue`} value={formatCurrency(metrics.revenue)} /> },
+      { key: 'patients', label: 'Patients', node: <KpiCard label={`${account} patients`} value={metrics.uniquePatients.toLocaleString()} /> },
+      { key: 'newPatients', label: 'New patients', node: <KpiCard label="New patients" value={metrics.newPatients.toLocaleString()} /> },
+      {
+        key: 'showUpRate',
+        label: 'Show-up rate',
+        node: (
+          <KpiCard
+            label="Show-up rate"
+            value={metrics.showUpRate == null ? '—' : `${Math.round(metrics.showUpRate * 100)}%`}
+          />
+        ),
+      },
+      {
+        key: 'shareOfTotal',
+        label: 'Share of total sessions',
+        node: <KpiCard label="Share of total sessions" value={latestShare == null ? '—' : `${Math.round(latestShare)}%`} />,
+      },
+    ];
+    if (registeredCount > 0) {
+      cards.push({
+        key: 'registeredPatients',
+        label: 'Registered patients',
+        node: (
+          <KpiCard
+            label={`Registered ${account} patients`}
+            value={registeredCount.toLocaleString()}
+            sub={
+              registeredCount > allTimeActivePatients
+                ? `${(registeredCount - allTimeActivePatients).toLocaleString()} not yet booked`
+                : 'All registered patients have booked'
+            }
+          />
+        ),
+      });
+    }
+    return cards;
+  }, [account, metrics, latestShare, registeredCount, allTimeActivePatients]);
+
   if (accountRows.length === 0) {
     return (
       <p style={{ color: '#898781', fontSize: 14 }}>
@@ -50,27 +96,19 @@ export default function AccountView({ rows, registeredPatients, account, preset 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <KpiCard label={`${account} sessions`} value={metrics.totalSessions.toLocaleString()} />
-        <KpiCard label={`${account} revenue`} value={formatCurrency(metrics.revenue)} />
-        <KpiCard label={`${account} patients`} value={metrics.uniquePatients.toLocaleString()} />
-        <KpiCard label="New patients" value={metrics.newPatients.toLocaleString()} />
-        <KpiCard
-          label="Show-up rate"
-          value={metrics.showUpRate == null ? '—' : `${Math.round(metrics.showUpRate * 100)}%`}
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <CustomizeStatsButton
+          options={statCards.map(({ key, label }) => ({ key, label }))}
+          hidden={hidden}
+          onToggle={toggle}
         />
-        <KpiCard label="Share of total sessions" value={latestShare == null ? '—' : `${Math.round(latestShare)}%`} />
-        {registeredCount > 0 && (
-          <KpiCard
-            label={`Registered ${account} patients`}
-            value={registeredCount.toLocaleString()}
-            sub={
-              registeredCount > allTimeActivePatients
-                ? `${(registeredCount - allTimeActivePatients).toLocaleString()} not yet booked`
-                : 'All registered patients have booked'
-            }
-          />
-        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        {statCards
+          .filter((card) => !hidden.includes(card.key))
+          .map((card) => (
+            <div key={card.key}>{card.node}</div>
+          ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

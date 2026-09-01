@@ -71,7 +71,9 @@ also serve from `/clinic-dashboards/` rather than `/`.
    (see below), an extra **"Registered {account} patients"** card shows the
    total who've registered with that payer — whether or not they've been
    seen/billed yet — with a "N not yet booked" note when that total exceeds
-   the account's active (billed) patient count.
+   the account's active (billed) patient count. Click **Customize stats**
+   (top right of the stat row) to show or hide any of these cards — nothing
+   here needs a code change; see below.
 3. **Investor View** is a share-ready, single-account pitch page: a headline
    ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), hero stats (ARR
    run-rate, revenue growth MoM, revenue to date, patient LTV to date, and —
@@ -88,6 +90,21 @@ also serve from `/clinic-dashboards/` rather than `/`.
    current calendar month counts once at least 70% of it has elapsed,
    otherwise it's excluded so an early-month partial total can't understate
    (or overstate) the story.
+
+   **Customize stats**, next to Download as PDF, opens a checklist of every
+   hero stat the page currently knows how to compute — check one to show it,
+   uncheck to hide it (the "Customize stats" control itself, and whatever
+   you hide, never appear in the printed/PDF version). Everything is shown
+   by default; unchecking is how you hide one that doesn't fit the story
+   (e.g. Show-up rate). Registered patients only shows up as an option once
+   you've uploaded a registered-patients export — there's nothing to turn on
+   before then, since there'd be nothing to show. Choices are saved per
+   browser (`localStorage`) and shared across accounts, not per-account —
+   they're remembered the next time you open the page. There's no way to add
+   a *new kind* of stat this way — only show/hide the ones already built
+   into the app (see `src/pages/AccountView.tsx` and
+   `src/pages/InvestorView.tsx` for the full catalog, or ask for a new one to
+   be added to it).
 
    A handful of small config maps at the top of `src/pages/InvestorView.tsx`
    (keyed by account name, lowercase) drive facts the spreadsheet can't

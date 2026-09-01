@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import ChartCard from '../components/ChartCard';
 import HeroStat from '../components/HeroStat';
+import CustomizeStatsButton from '../components/CustomizeStatsButton';
 import HeroAreaChart from '../components/charts/HeroAreaChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import { computeMetrics, computeShareOfTotal, excludeCurrentMonth, monthsForRange } from '../lib/metrics';
 import type { AppointmentRow, RegisteredPatientRow } from '../lib/types';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
+import { useStatVisibility } from '../lib/useStatVisibility';
 
 interface InvestorViewProps {
   rows: AppointmentRow[];
@@ -127,6 +129,85 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
     };
   }, [metrics, months, eoyArrTarget]);
 
+  const { hidden, toggle } = useStatVisibility('investor');
+
+  const heroCards = useMemo(() => {
+    if (!stats) return [];
+    const cards: { key: string; label: string; node: ReactNode }[] = [
+      {
+        key: 'arrRunRate',
+        label: 'ARR run-rate',
+        node: (
+          <HeroStat
+            label="ARR run-rate"
+            value={stats.arrRunRate == null ? '—' : formatCurrency(stats.arrRunRate)}
+            sub={`Based on ${stats.lastLabel} pace — actual billed revenue`}
+            accent={ACCENT}
+          />
+        ),
+      },
+      {
+        key: 'revenueGrowth',
+        label: 'Revenue growth (MoM)',
+        node: (
+          <HeroStat
+            label="Revenue growth (MoM)"
+            value={
+              stats.revenueGrowthPct == null
+                ? '—'
+                : `${stats.revenueGrowthPct >= 0 ? '+' : ''}${stats.revenueGrowthPct.toFixed(0)}%`
+            }
+            sub={`${formatCurrency(stats.compareRevenueValue)} → ${formatCurrency(stats.lastRevenueValue)}`}
+            accent={ACCENT}
+          />
+        ),
+      },
+      {
+        key: 'revenueToDate',
+        label: 'Revenue to date',
+        node: (
+          <HeroStat
+            label="Revenue to date"
+            value={formatCurrency(metrics.revenue)}
+            sub={`${metrics.totalSessions.toLocaleString()} sessions · ${metrics.uniquePatients.toLocaleString()} patients`}
+            accent={ACCENT}
+          />
+        ),
+      },
+      {
+        key: 'patientLtv',
+        label: 'Patient LTV (to date)',
+        node: (
+          <HeroStat
+            label="Patient LTV (to date)"
+            value={stats.avgRevenuePerPatient == null ? '—' : formatCurrency(stats.avgRevenuePerPatient)}
+            sub={`${metrics.uniquePatients.toLocaleString()} patients · still active, not a final lifetime figure`}
+            accent={ACCENT}
+          />
+        ),
+      },
+    ];
+    if (registeredCount > 0) {
+      cards.push({
+        key: 'registeredPatients',
+        label: 'Registered patients',
+        node: (
+          <HeroStat
+            label="Registered patients"
+            value={registeredCount.toLocaleString()}
+            sub={
+              registeredCount > metrics.uniquePatients
+                ? `${(registeredCount - metrics.uniquePatients).toLocaleString()} not yet booked — pipeline within ${account}`
+                : `All registered ${account} patients have booked`
+            }
+            accent={ACCENT}
+          />
+        ),
+      });
+    }
+    return cards;
+  }, [stats, metrics, registeredCount, account]);
+
   if (accountRows.length === 0 || !stats) {
     return (
       <p style={{ color: '#898781', fontSize: 14 }}>
@@ -160,47 +241,19 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
         )}
       </div>
 
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <CustomizeStatsButton
+          options={heroCards.map(({ key, label }) => ({ key, label }))}
+          hidden={hidden}
+          onToggle={toggle}
+        />
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-        <HeroStat
-          label="ARR run-rate"
-          value={stats.arrRunRate == null ? '—' : formatCurrency(stats.arrRunRate)}
-          sub={`Based on ${stats.lastLabel} pace — actual billed revenue`}
-          accent={ACCENT}
-        />
-        <HeroStat
-          label="Revenue growth (MoM)"
-          value={
-            stats.revenueGrowthPct == null
-              ? '—'
-              : `${stats.revenueGrowthPct >= 0 ? '+' : ''}${stats.revenueGrowthPct.toFixed(0)}%`
-          }
-          sub={`${formatCurrency(stats.compareRevenueValue)} → ${formatCurrency(stats.lastRevenueValue)}`}
-          accent={ACCENT}
-        />
-        <HeroStat
-          label="Revenue to date"
-          value={formatCurrency(metrics.revenue)}
-          sub={`${metrics.totalSessions.toLocaleString()} sessions · ${metrics.uniquePatients.toLocaleString()} patients`}
-          accent={ACCENT}
-        />
-        <HeroStat
-          label="Patient LTV (to date)"
-          value={stats.avgRevenuePerPatient == null ? '—' : formatCurrency(stats.avgRevenuePerPatient)}
-          sub={`${metrics.uniquePatients.toLocaleString()} patients · still active, not a final lifetime figure`}
-          accent={ACCENT}
-        />
-        {registeredCount > 0 && (
-          <HeroStat
-            label="Registered patients"
-            value={registeredCount.toLocaleString()}
-            sub={
-              registeredCount > metrics.uniquePatients
-                ? `${(registeredCount - metrics.uniquePatients).toLocaleString()} not yet booked — pipeline within ${account}`
-                : `All registered ${account} patients have booked`
-            }
-            accent={ACCENT}
-          />
-        )}
+        {heroCards
+          .filter((card) => !hidden.includes(card.key))
+          .map((card) => (
+            <div key={card.key}>{card.node}</div>
+          ))}
       </div>
 
       <ChartCard title="Cumulative revenue" subtitle={`${account} · ${stats.firstLabel} – ${stats.lastLabel}`} height={340}>
