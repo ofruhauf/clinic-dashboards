@@ -32,6 +32,10 @@ export function deserializeDataset(serialized: SerializedDataset): ParsedDataset
       ...row,
       scheduledFor: new Date(row.scheduledFor),
     })),
+    // Older cached data / snapshot files predate these fields — default so the
+    // rest of the app can always assume they're present, not undefined.
+    registeredPatients: serialized.registeredPatients ?? [],
+    registeredDuplicateCount: serialized.registeredDuplicateCount ?? 0,
   };
 }
 

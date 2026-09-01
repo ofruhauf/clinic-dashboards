@@ -2,9 +2,10 @@ interface KpiCardProps {
   label: string;
   value: string;
   delta?: { pct: number; label: string } | null;
+  sub?: string;
 }
 
-export default function KpiCard({ label, value, delta }: KpiCardProps) {
+export default function KpiCard({ label, value, delta, sub }: KpiCardProps) {
   const deltaColor = delta == null ? undefined : delta.pct >= 0 ? '#006300' : '#d03b3b';
   const deltaSign = delta == null ? '' : delta.pct >= 0 ? '▲' : '▼';
 
@@ -29,6 +30,7 @@ export default function KpiCard({ label, value, delta }: KpiCardProps) {
           {deltaSign} {Math.abs(delta.pct * 100).toFixed(1)}% {delta.label}
         </p>
       )}
+      {sub && <p style={{ fontSize: 12, color: '#898781', marginTop: 4 }}>{sub}</p>}
     </div>
   );
 }

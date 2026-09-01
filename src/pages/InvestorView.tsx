@@ -5,11 +5,12 @@ import HeroAreaChart from '../components/charts/HeroAreaChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import { computeMetrics, computeShareOfTotal, excludeCurrentMonth, monthsForRange } from '../lib/metrics';
-import type { AppointmentRow } from '../lib/types';
+import type { AppointmentRow, RegisteredPatientRow } from '../lib/types';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 
 interface InvestorViewProps {
   rows: AppointmentRow[];
+  registeredPatients: RegisteredPatientRow[];
   account: string;
 }
 
@@ -40,12 +41,16 @@ const ACCOUNT_ORGANIC_NOTE: Record<string, string> = {
 const PIPELINE_TARGETS = ['Highmark', 'BCBS NC', 'IDX'];
 const PIPELINE_COVERED_LIVES = '15M+';
 
-export default function InvestorView({ rows, account }: InvestorViewProps) {
+export default function InvestorView({ rows, registeredPatients, account }: InvestorViewProps) {
   const accountKey = account.toLowerCase();
   const launchDate = ACCOUNT_LAUNCH_DATES[accountKey];
   const eoyArrTarget = ACCOUNT_EOY_ARR_TARGET[accountKey];
   const organicNote = ACCOUNT_ORGANIC_NOTE[accountKey];
   const launchCutoff = useMemo(() => (launchDate ? new Date(`${launchDate}T00:00:00Z`) : null), [launchDate]);
+  const registeredCount = useMemo(
+    () => registeredPatients.filter((p) => p.company === account).length,
+    [registeredPatients, account]
+  );
 
   const allAccountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
   const accountRows = useMemo(
@@ -184,6 +189,18 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
           sub={`${metrics.uniquePatients.toLocaleString()} patients · still active, not a final lifetime figure`}
           accent={ACCENT}
         />
+        {registeredCount > 0 && (
+          <HeroStat
+            label="Registered patients"
+            value={registeredCount.toLocaleString()}
+            sub={
+              registeredCount > metrics.uniquePatients
+                ? `${(registeredCount - metrics.uniquePatients).toLocaleString()} not yet booked — pipeline within ${account}`
+                : `All registered ${account} patients have booked`
+            }
+            accent={ACCENT}
+          />
+        )}
       </div>
 
       <ChartCard title="Cumulative revenue" subtitle={`${account} · ${stats.firstLabel} – ${stats.lastLabel}`} height={340}>
@@ -317,6 +334,14 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
             {' '}
             Patient LTV is total revenue to date ÷ unique patients — an average, not a per-patient lifetime figure,
             since {account} launched {launchDate ?? 'recently'} and most patients are still in active treatment.
+          </>
+        )}
+        {registeredCount > 0 && (
+          <>
+            {' '}
+            Registered patients comes from a separate product user database, not the claims/billing system, and
+            uses its own patient IDs — the "not yet booked" figure is the difference between the two counts, not a
+            per-patient match between systems.
           </>
         )}
       </p>

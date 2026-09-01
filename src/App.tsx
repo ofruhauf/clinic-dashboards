@@ -6,6 +6,7 @@ import Overview from './pages/Overview';
 import AccountView from './pages/AccountView';
 import InvestorView from './pages/InvestorView';
 import { mergeIntoDataset, parseClaimsFile } from './lib/parseClaimsFile';
+import { looksLikeUsersFile, parseUsersFile } from './lib/parseUsersFile';
 import { downloadSnapshot, isSnapshotFile, parseSnapshotFile } from './lib/snapshot';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
 import { listAccounts, resolveDateRange } from './lib/metrics';
@@ -56,7 +57,14 @@ export default function App() {
     const failures: string[] = [];
     for (const file of files) {
       try {
-        const parsed = isSnapshotFile(file) ? await parseSnapshotFile(file) : await parseClaimsFile(file);
+        let parsed;
+        if (isSnapshotFile(file)) {
+          parsed = await parseSnapshotFile(file);
+        } else if (await looksLikeUsersFile(file)) {
+          parsed = await parseUsersFile(file);
+        } else {
+          parsed = await parseClaimsFile(file);
+        }
         next = mergeIntoDataset(next, file.name, parsed);
       } catch (e) {
         failures.push(`${file.name}: ${e instanceof Error ? e.message : 'could not parse'}`);
@@ -95,8 +103,9 @@ export default function App() {
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agave Health — Growth Dashboard</h1>
           <p style={{ fontSize: 14, color: '#52514e', marginBottom: 20 }}>
             Upload your weekly claims reports to see clinic growth, sessions, and revenue trends. Drop in as many
-            files at once as you like — future uploads add to what's already here. Got a snapshot file (.json) from
-            a colleague instead? Drop that in too — it loads the same way.
+            files at once as you like — future uploads add to what's already here. A registered-users export works
+            too (adds registered-patient counts by payer), and so does a snapshot file (.json) shared by a
+            colleague — drop any of them in and they load the same way.
           </p>
           <UploadPanel onFiles={handleFiles} busy={busy} error={error} />
         </div>
@@ -125,6 +134,12 @@ export default function App() {
             {dataset.skippedCount > 0 ? ` · ${dataset.skippedCount} skipped (missing patient/date)` : ''}
             {dataset.duplicateCount > 0
               ? ` · ${dataset.duplicateCount} claim${dataset.duplicateCount === 1 ? '' : 's'} updated by a later upload`
+              : ''}
+            {dataset.registeredPatients.length > 0
+              ? ` · ${dataset.registeredPatients.length.toLocaleString()} registered patients loaded`
+              : ''}
+            {dataset.registeredDuplicateCount > 0
+              ? ` · ${dataset.registeredDuplicateCount.toLocaleString()} registered patient record${dataset.registeredDuplicateCount === 1 ? '' : 's'} updated by a later upload`
               : ''}
           </p>
         </div>
@@ -258,7 +273,12 @@ export default function App() {
       {tab === 'overview' && <Overview rows={dataset.rows} preset={preset} />}
       {tab === 'account' &&
         (selectedAccount ? (
-          <AccountView rows={dataset.rows} account={selectedAccount} preset={preset} />
+          <AccountView
+            rows={dataset.rows}
+            registeredPatients={dataset.registeredPatients}
+            account={selectedAccount}
+            preset={preset}
+          />
         ) : (
           <p style={{ color: '#898781', fontSize: 14 }}>
             No accounts (insurance payers) found in this dataset yet.
@@ -266,7 +286,7 @@ export default function App() {
         ))}
       {tab === 'investor' &&
         (selectedAccount ? (
-          <InvestorView rows={dataset.rows} account={selectedAccount} />
+          <InvestorView rows={dataset.rows} registeredPatients={dataset.registeredPatients} account={selectedAccount} />
         ) : (
           <p style={{ color: '#898781', fontSize: 14 }}>
             No accounts (insurance payers) found in this dataset yet.

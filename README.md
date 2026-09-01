@@ -67,13 +67,18 @@ also serve from `/clinic-dashboards/` rather than `/`.
    shows sessions, revenue, patients, and that account's share of total
    clinic sessions over time. Use the account dropdown to switch to any
    other payer in your data. (Show-up rate isn't in claims data, so it
-   displays as "—".)
+   displays as "—".) If a registered-patients export has also been uploaded
+   (see below), an extra **"Registered {account} patients"** card shows the
+   total who've registered with that payer — whether or not they've been
+   seen/billed yet — with a "N not yet booked" note when that total exceeds
+   the account's active (billed) patient count.
 3. **Investor View** is a share-ready, single-account pitch page: a headline
-   ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), four hero stats (ARR
-   run-rate, revenue growth MoM, revenue to date, patient LTV to date), a
-   large cumulative-revenue chart, a year-end ARR projection callout,
-   supporting monthly-revenue / share-of-clinic-volume charts, and a
-   pipeline/expansion
+   ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), hero stats (ARR
+   run-rate, revenue growth MoM, revenue to date, patient LTV to date, and —
+   once a registered-patients export is loaded — registered patients as a
+   pipeline signal), a large cumulative-revenue chart, a year-end ARR
+   projection callout, supporting monthly-revenue / share-of-clinic-volume
+   charts, and a pipeline/expansion
    section. Unlike the other tabs it always shows the account's *entire*
    history (not the date-range filter) — a pitch is the whole story, not a
    filtered slice. A **Download as PDF** button (header, visible on this tab)
@@ -192,6 +197,37 @@ series.
 full dataset (or, on the account view, their earliest service date under
 that specific account/payer), keyed by `external_patient_id` — there's no
 separate new/returning column required.
+
+### Registered-patients export
+
+Alongside claims reports, you can upload an export from the product's own
+user database — everyone who has registered with a payer partner, whether
+or not they've been seen/billed yet. Drop it into the same upload panel;
+the app tells it apart from a claims report by its header row (no file
+extension or filename convention needed), so `.csv` or `.xlsx` both work.
+
+Only two columns are read:
+
+| Column | Required |
+|---|---|
+| `userId` | yes — dedupe key across uploads |
+| `clientCompany` | no (blank → not counted for any account) |
+
+This export tends to carry a lot more than that (name, email, phone, date
+of birth, IP address, device info, subscription status, and more) — none
+of it is read. `clientCompany` is normalized the same way `payer_name` is
+in claims data (e.g. any case of "horizon" → "Horizon"), so the two sources
+line up under the same account names. Re-uploading the file, or a later
+export that repeats the same `userId`, updates that row in place rather
+than double-counting it — tracked separately from claims duplicates as
+"registered patient records updated" in the header, since a userId match
+and a claim match are different things.
+
+There's no shared ID between this export and claims data — `userId` (this
+export) and `external_patient_id` (claims) come from different systems and
+aren't linked. The "N not yet booked" figures shown in the account view and
+Investor View are the difference between the two *counts*, not a verified
+per-patient match — disclosed as such wherever the number appears.
 
 ## Tech
 

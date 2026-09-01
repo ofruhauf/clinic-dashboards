@@ -11,18 +11,26 @@ import {
   monthsForRange,
   resolveDateRange,
 } from '../lib/metrics';
-import type { AppointmentRow, DateRangePreset } from '../lib/types';
+import type { AppointmentRow, DateRangePreset, RegisteredPatientRow } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 
 interface AccountViewProps {
   rows: AppointmentRow[];
+  registeredPatients: RegisteredPatientRow[];
   account: string;
   preset: DateRangePreset;
 }
 
-export default function AccountView({ rows, account, preset }: AccountViewProps) {
+export default function AccountView({ rows, registeredPatients, account, preset }: AccountViewProps) {
   const accountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
+  const registeredCount = useMemo(
+    () => registeredPatients.filter((p) => p.company === account).length,
+    [registeredPatients, account]
+  );
+  // All-time, not date-range filtered — comparing a registered total (which isn't
+  // date-scoped) against a narrower filtered active count would overstate the gap.
+  const allTimeActivePatients = useMemo(() => new Set(accountRows.map((r) => r.patientId)).size, [accountRows]);
 
   const range = useMemo(() => resolveDateRange(preset, accountRows), [preset, accountRows]);
   const filtered = useMemo(() => filterByRange(accountRows, range), [accountRows, range]);
@@ -52,6 +60,17 @@ export default function AccountView({ rows, account, preset }: AccountViewProps)
           value={metrics.showUpRate == null ? '—' : `${Math.round(metrics.showUpRate * 100)}%`}
         />
         <KpiCard label="Share of total sessions" value={latestShare == null ? '—' : `${Math.round(latestShare)}%`} />
+        {registeredCount > 0 && (
+          <KpiCard
+            label={`Registered ${account} patients`}
+            value={registeredCount.toLocaleString()}
+            sub={
+              registeredCount > allTimeActivePatients
+                ? `${(registeredCount - allTimeActivePatients).toLocaleString()} not yet booked`
+                : 'All registered patients have booked'
+            }
+          />
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

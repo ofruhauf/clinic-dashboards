@@ -12,13 +12,25 @@ export interface AppointmentRow {
   // uploaded files (not unique on its own; real exports reuse it across different real claims)
 }
 
+// From a separate export (the product's own user database), not the claims/billing
+// system — identifies who has registered with a payer partner, whether or not
+// they've been seen/billed yet. Deliberately minimal: no name, email, phone, DOB,
+// or any of the other PHI-adjacent fields that export carries, since a userId +
+// company is all this dashboard needs.
+export interface RegisteredPatientRow {
+  userId: string; // stable id from the product's user database — dedupe key across uploads
+  company: string | null; // normalized clientCompany (e.g. "Horizon"); null if blank
+}
+
 export interface ParsedDataset {
   rows: AppointmentRow[];
+  registeredPatients: RegisteredPatientRow[];
   fileNames: string[]; // every file that has contributed rows, in upload order
   uploadedAt: string; // ISO, most recent upload
   rowCount: number;
   skippedCount: number; // cumulative rows skipped (missing patient/date) across all uploads
-  duplicateCount: number; // cumulative rows skipped as duplicates (same encounter already loaded)
+  duplicateCount: number; // cumulative claims matched to one already loaded (updated or confirmed unchanged)
+  registeredDuplicateCount: number; // same, for registered-patient rows (matched by userId)
 }
 
 export type DateRangePreset =

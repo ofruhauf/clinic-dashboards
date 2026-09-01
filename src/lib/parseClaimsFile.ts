@@ -1,4 +1,4 @@
-import type { AppointmentRow, ParsedDataset } from './types';
+import type { AppointmentRow, ParsedDataset, RegisteredPatientRow } from './types';
 
 // Column names are matched case-insensitively with separators stripped, so
 // "Date of Service" and "date_of_service" both resolve the same way.
@@ -70,7 +70,10 @@ function toChargeDollars(value: unknown): number {
 
 const PAYER_ALIASES: { pattern: RegExp; name: string }[] = [{ pattern: /horizon/i, name: 'Horizon' }];
 
-function normalizePayer(raw: string): string {
+// Exported so other sources of account/company names (e.g. the registered-users
+// export) normalize to the same canonical names as claims data — "Horizon" needs
+// to mean the same thing everywhere it's used to filter/group.
+export function normalizePayer(raw: string): string {
   for (const { pattern, name } of PAYER_ALIASES) {
     if (pattern.test(raw)) return name;
   }
@@ -176,9 +179,9 @@ function claimKey(row: Pick<AppointmentRow, 'encounterId' | 'scheduledFor'>): st
 }
 
 /**
- * Merge freshly parsed rows into an existing dataset, matching by encounter
- * ID + service date so re-uploading an overlapping week's report doesn't
- * double-count. When a match recurs, the newly uploaded row normally
+ * Merge freshly parsed claim rows into the existing set, matching by
+ * encounter ID + service date so re-uploading an overlapping week's report
+ * doesn't double-count. When a match recurs, the newly uploaded row normally
  * REPLACES the existing one — claims data for a given claim can get
  * corrected between reports (e.g. a visit type or procedure code fixed in a
  * later week's export). Rows without an encounter ID can't be matched and
@@ -203,12 +206,8 @@ function claimKey(row: Pick<AppointmentRow, 'encounterId' | 'scheduledFor'>): st
  * and never overwrites it, regardless of which file was uploaded more
  * recently.
  */
-export function mergeIntoDataset(
-  existing: ParsedDataset | null,
-  fileName: string,
-  parsed: { rows: AppointmentRow[]; skippedCount: number }
-): ParsedDataset {
-  const rows = existing ? [...existing.rows] : [];
+function mergeClaimsRows(existingRows: AppointmentRow[], newRows: AppointmentRow[]): { rows: AppointmentRow[]; updatedCount: number } {
+  const rows = [...existingRows];
   const indexByClaimKey = new Map<string, number>();
   rows.forEach((row, i) => {
     const key = claimKey(row);
@@ -216,7 +215,7 @@ export function mergeIntoDataset(
   });
 
   let updatedCount = 0;
-  for (const row of parsed.rows) {
+  for (const row of newRows) {
     const key = claimKey(row);
     const existingIndex = key ? indexByClaimKey.get(key) : undefined;
     if (existingIndex !== undefined) {
@@ -232,12 +231,59 @@ export function mergeIntoDataset(
     rows.push(row);
   }
 
+  return { rows, updatedCount };
+}
+
+/**
+ * Merge freshly parsed registered-patient rows, deduping by userId — a
+ * simpler matching key than claims, since there's no service date or
+ * procedure-code correction concept for a registration record.
+ */
+function mergeRegisteredPatients(
+  existingPatients: RegisteredPatientRow[],
+  newPatients: RegisteredPatientRow[]
+): { registeredPatients: RegisteredPatientRow[]; updatedCount: number } {
+  const registeredPatients = [...existingPatients];
+  const indexByUserId = new Map<string, number>();
+  registeredPatients.forEach((p, i) => indexByUserId.set(p.userId, i));
+
+  let updatedCount = 0;
+  for (const patient of newPatients) {
+    const existingIndex = indexByUserId.get(patient.userId);
+    if (existingIndex !== undefined) {
+      registeredPatients[existingIndex] = patient;
+      updatedCount += 1;
+      continue;
+    }
+    indexByUserId.set(patient.userId, registeredPatients.length);
+    registeredPatients.push(patient);
+  }
+
+  return { registeredPatients, updatedCount };
+}
+
+/**
+ * Single merge entry point for anything that can be uploaded: a claims
+ * report (rows), a registered-users export (registeredPatients), or a full
+ * snapshot (both). Whichever of `rows` / `registeredPatients` is present in
+ * `parsed` gets merged into the matching part of the existing dataset.
+ */
+export function mergeIntoDataset(
+  existing: ParsedDataset | null,
+  fileName: string,
+  parsed: { rows?: AppointmentRow[]; registeredPatients?: RegisteredPatientRow[]; skippedCount: number }
+): ParsedDataset {
+  const claimsResult = mergeClaimsRows(existing?.rows ?? [], parsed.rows ?? []);
+  const patientsResult = mergeRegisteredPatients(existing?.registeredPatients ?? [], parsed.registeredPatients ?? []);
+
   return {
-    rows,
+    rows: claimsResult.rows,
+    registeredPatients: patientsResult.registeredPatients,
     fileNames: [...(existing?.fileNames ?? []), fileName],
     uploadedAt: new Date().toISOString(),
-    rowCount: rows.length,
+    rowCount: claimsResult.rows.length,
     skippedCount: (existing?.skippedCount ?? 0) + parsed.skippedCount,
-    duplicateCount: (existing?.duplicateCount ?? 0) + updatedCount,
+    duplicateCount: (existing?.duplicateCount ?? 0) + claimsResult.updatedCount,
+    registeredDuplicateCount: (existing?.registeredDuplicateCount ?? 0) + patientsResult.updatedCount,
   };
 }
