@@ -5,7 +5,15 @@ import CustomizeStatsButton from '../components/CustomizeStatsButton';
 import HeroAreaChart from '../components/charts/HeroAreaChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
-import { computeMetrics, computeShareOfTotal, excludeCurrentMonth, monthsForRange } from '../lib/metrics';
+import {
+  addMonths,
+  computeCumulativeRegisteredPatients,
+  computeMetrics,
+  computeShareOfTotal,
+  excludeCurrentMonth,
+  monthLabel,
+  monthsForRange,
+} from '../lib/metrics';
 import type { AppointmentRow, RegisteredPatientRow } from '../lib/types';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 import { useStatVisibility } from '../lib/useStatVisibility';
@@ -49,9 +57,14 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
   const eoyArrTarget = ACCOUNT_EOY_ARR_TARGET[accountKey];
   const organicNote = ACCOUNT_ORGANIC_NOTE[accountKey];
   const launchCutoff = useMemo(() => (launchDate ? new Date(`${launchDate}T00:00:00Z`) : null), [launchDate]);
-  const registeredCount = useMemo(
-    () => registeredPatients.filter((p) => p.company === account).length,
+  const registeredForAccount = useMemo(
+    () => registeredPatients.filter((p) => p.company === account),
     [registeredPatients, account]
+  );
+  const registeredCount = registeredForAccount.length;
+  const datedRegistered = useMemo(
+    () => registeredForAccount.filter((p): p is typeof p & { registeredAt: Date } => p.registeredAt != null),
+    [registeredForAccount]
   );
 
   const allAccountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
@@ -66,6 +79,10 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
   const months = useMemo(() => monthsForRange(accountRows, { start: null, end: null }), [accountRows]);
   const metrics = useMemo(() => computeMetrics(accountRows, months, accountRows), [accountRows, months]);
   const share = useMemo(() => computeShareOfTotal(accountRows, rows, months), [accountRows, rows, months]);
+  const registeredGrowth = useMemo(
+    () => computeCumulativeRegisteredPatients(datedRegistered, months),
+    [datedRegistered, months]
+  );
 
   const stats = useMemo(() => {
     const completeMonths = excludeCurrentMonth(months);
@@ -208,6 +225,30 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
     return cards;
   }, [stats, metrics, registeredCount, account]);
 
+  // A leading zero-value month makes both growth curves visibly start from
+  // nothing rather than jumping in mid-climb — cosmetic only, not a claim
+  // about activity in that month.
+  // Anchored to one month before launch (not "one month before whichever
+  // month real data happens to start"), so the lead-in reads as "before we
+  // launched" rather than shifting around as historical data fills in.
+  const leadInMonth = useMemo(
+    () => (launchDate ? addMonths(launchDate.slice(0, 7), -1) : null),
+    [launchDate]
+  );
+
+  const cumulativeRevenueChartData = useMemo(() => {
+    const series = stats?.cumulativeRevenue ?? [];
+    if (series.length === 0) return series;
+    const priorMonth = leadInMonth ?? addMonths(series[0].month, -1);
+    return [{ month: priorMonth, label: monthLabel(priorMonth), value: 0 }, ...series];
+  }, [stats, leadInMonth]);
+
+  const registeredGrowthChartData = useMemo(() => {
+    if (registeredGrowth.length === 0) return registeredGrowth;
+    const priorMonth = leadInMonth ?? addMonths(registeredGrowth[0].month, -1);
+    return [{ month: priorMonth, label: monthLabel(priorMonth), total: 0 }, ...registeredGrowth];
+  }, [registeredGrowth, leadInMonth]);
+
   if (accountRows.length === 0 || !stats) {
     return (
       <p style={{ color: '#898781', fontSize: 14 }}>
@@ -256,17 +297,36 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
           ))}
       </div>
 
-      <ChartCard title="Cumulative revenue" subtitle={`${account} · ${stats.firstLabel} – ${stats.lastLabel}`} height={340}>
-        <HeroAreaChart
-          data={stats.cumulativeRevenue}
-          xKey="label"
-          yKey="value"
-          color={ACCENT}
-          gradientId="investorHero"
-          valueFormatter={formatCurrency}
-          tickFormatter={formatCurrencyCompact}
-        />
-      </ChartCard>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: registeredGrowthChartData.length > 0 ? '1fr 1fr' : '1fr',
+          gap: 16,
+        }}
+      >
+        <ChartCard
+          title="Cumulative revenue"
+          subtitle={`${account} · ${cumulativeRevenueChartData[0]?.label ?? stats.firstLabel} – ${stats.lastLabel}`}
+        >
+          <HeroAreaChart
+            data={cumulativeRevenueChartData}
+            xKey="label"
+            yKey="value"
+            color={ACCENT}
+            gradientId="investorHero"
+            valueFormatter={formatCurrency}
+            tickFormatter={formatCurrencyCompact}
+          />
+        </ChartCard>
+        {registeredGrowthChartData.length > 0 && (
+          <ChartCard
+            title="Registered patient growth"
+            subtitle={`${account} · ${registeredGrowthChartData[0].label} – ${registeredGrowthChartData[registeredGrowthChartData.length - 1].label}`}
+          >
+            <SimpleLineChart data={registeredGrowthChartData} xKey="label" yKey="total" color={ACCENT} />
+          </ChartCard>
+        )}
+      </div>
 
       {stats.eoyProjection && (
         <div

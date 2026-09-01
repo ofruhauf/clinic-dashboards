@@ -15,7 +15,7 @@ export function monthLabel(key: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-function addMonths(key: string, delta: number): string {
+export function addMonths(key: string, delta: number): string {
   const [year, month] = key.split('-').map(Number);
   const d = new Date(Date.UTC(year, month - 1 + delta, 1));
   return monthKey(d);

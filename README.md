@@ -89,9 +89,11 @@ also serve from `/clinic-dashboards/` rather than `/`.
    ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), hero stats (ARR
    run-rate, revenue growth MoM, revenue to date, patient LTV to date, and —
    once a registered-patients export is loaded — registered patients as a
-   pipeline signal), a large cumulative-revenue chart, a year-end ARR
-   projection callout, supporting monthly-revenue / share-of-clinic-volume
-   charts, and a pipeline/expansion
+   pipeline signal), the cumulative-revenue chart side by side with the
+   registered-patient-growth chart (once a registered-patients export is
+   loaded — it falls back to a single full-width revenue chart otherwise), a
+   year-end ARR projection callout, supporting monthly-revenue /
+   share-of-clinic-volume charts, and a pipeline/expansion
    section. Unlike the other tabs it always shows the account's *entire*
    history (not the date-range filter) — a pitch is the whole story, not a
    filtered slice. A **Download as PDF** button (header, visible on this tab)
@@ -101,6 +103,15 @@ also serve from `/clinic-dashboards/` rather than `/`.
    current calendar month counts once at least 70% of it has elapsed,
    otherwise it's excluded so an early-month partial total can't understate
    (or overstate) the story.
+
+   Both of those two charts are prepended with one extra zero-value point for
+   the month before the account's configured launch date (see
+   `ACCOUNT_LAUNCH_DATES` in `InvestorView.tsx`) — e.g. Horizon launched
+   2026-06-01, so both charts show a "May 2026" $0/0 starting point even
+   though real activity didn't begin until later. This is purely cosmetic,
+   so the curve visibly starts from zero instead of jumping in mid-climb —
+   it isn't a claim that anything happened that month, and it doesn't affect
+   any other chart, stat, or the date-range filter elsewhere on the page.
 
    **Customize stats**, next to Download as PDF, opens a checklist of every
    hero stat the page currently knows how to compute — check one to show it,
