@@ -69,10 +69,11 @@ also serve from `/clinic-dashboards/` rather than `/`.
    other payer in your data. (Show-up rate isn't in claims data, so it
    displays as "—".)
 3. **Investor View** is a share-ready, single-account pitch page: a headline
-   ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), four hero stats (ARR
-   run-rate, revenue growth MoM, revenue to date, time to traction), a large
-   cumulative-revenue chart, a year-end ARR projection callout, supporting
-   monthly-revenue / share-of-clinic-volume charts, and a pipeline/expansion
+   ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), five hero stats (ARR
+   run-rate, revenue growth MoM, revenue to date, time to traction, patient
+   LTV to date), a large cumulative-revenue chart, a year-end ARR projection
+   callout, supporting monthly-revenue / share-of-clinic-volume charts, and a
+   pipeline/expansion
    section. Unlike the other tabs it always shows the account's *entire*
    history (not the date-range filter) — a pitch is the whole story, not a
    filtered slice. A **Download as PDF** button (header, visible on this tab)
@@ -96,6 +97,15 @@ also serve from `/clinic-dashboards/` rather than `/`.
      marketing spend") shown under the headline.
    - `PIPELINE_TARGETS` / `PIPELINE_COVERED_LIVES` — the expansion pipeline
      badges shown in the "playbook" section.
+
+   **Patient LTV** is deliberately *not* a projected lifetime figure — it's
+   total revenue to date ÷ unique patients, labeled "to date" everywhere it
+   appears. A true projected LTV (revenue rate × expected average patient
+   retention) needs an observed or assumed retention period, which isn't
+   something the data can support yet for a newly launched account where
+   most patients are still in active treatment. If/when that changes, the
+   projected version can be added the same way `ACCOUNT_EOY_ARR_TARGET`
+   handles the ARR goal: as an explicit, disclosed assumption.
 4. **Clinic overview** shows the same shape of metrics clinic-wide: sessions,
    revenue, unique/new patients, month-over-month growth, session mix by
    visit type, revenue by month, and account (payer) mix. Revenue is the

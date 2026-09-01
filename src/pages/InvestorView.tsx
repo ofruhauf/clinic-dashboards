@@ -120,6 +120,7 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
       monthsSinceFirst,
       cumulativeRevenue,
       eoyProjection,
+      avgRevenuePerPatient: metrics.uniquePatients > 0 ? metrics.revenue / metrics.uniquePatients : null,
     };
   }, [metrics, months, eoyArrTarget]);
 
@@ -183,6 +184,12 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
           label="Time to traction"
           value={`${stats.monthsSinceFirst} mo`}
           sub={`Since first session in ${stats.firstLabel}`}
+          accent={ACCENT}
+        />
+        <HeroStat
+          label="Patient LTV (to date)"
+          value={stats.avgRevenuePerPatient == null ? '—' : formatCurrency(stats.avgRevenuePerPatient)}
+          sub={`${metrics.uniquePatients.toLocaleString()} patients · still active, not a final lifetime figure`}
           accent={ACCENT}
         />
       </div>
@@ -311,6 +318,13 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
             The {formatCurrency(stats.eoyProjection.targetArr)} year-end ARR figure is a projection assuming{' '}
             {stats.eoyProjection.impliedMonthlyGrowthPct.toFixed(0)}% sustained month-over-month growth from{' '}
             {stats.lastLabel} through December {stats.lastYear} — a goal, not a guarantee.
+          </>
+        )}
+        {stats.avgRevenuePerPatient != null && (
+          <>
+            {' '}
+            Patient LTV is total revenue to date ÷ unique patients — an average, not a per-patient lifetime figure,
+            since {account} launched {launchDate ?? 'recently'} and most patients are still in active treatment.
           </>
         )}
       </p>
