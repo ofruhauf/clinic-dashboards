@@ -20,6 +20,7 @@ export interface AppointmentRow {
 export interface RegisteredPatientRow {
   userId: string; // stable id from the product's user database — dedupe key across uploads
   company: string | null; // normalized clientCompany (e.g. "Horizon"); null if blank
+  registeredAt: Date | null; // createdAt — when they registered; null if missing/unparseable
 }
 
 export interface ParsedDataset {

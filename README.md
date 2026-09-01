@@ -74,6 +74,17 @@ also serve from `/clinic-dashboards/` rather than `/`.
    the account's active (billed) patient count. Click **Customize stats**
    (top right of the stat row) to show or hide any of these cards — nothing
    here needs a code change; see below.
+
+   Two separate growth-over-time charts sit side by side: **"Registered
+   patient growth"** (cumulative registrations, from the registered-patients
+   export's `createdAt`) and **"Active (billed) patient growth"** (cumulative
+   patients with a billed claim). **Registered patients is the primary
+   patient-growth metric** — it's the one to reach for by default when the
+   question is "how fast are we growing," since it captures everyone who's
+   signed up, not just who's been billed so far; the active/billed chart
+   stays as a secondary, clinically-useful view of who's actually been seen.
+   The registered chart only appears once at least one registered patient
+   for that account has a parseable registration date.
 3. **Investor View** is a share-ready, single-account pitch page: a headline
    ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), hero stats (ARR
    run-rate, revenue growth MoM, revenue to date, patient LTV to date, and —
@@ -223,22 +234,26 @@ or not they've been seen/billed yet. Drop it into the same upload panel;
 the app tells it apart from a claims report by its header row (no file
 extension or filename convention needed), so `.csv` or `.xlsx` both work.
 
-Only two columns are read:
+Only three columns are read:
 
 | Column | Required |
 |---|---|
 | `userId` | yes — dedupe key across uploads |
 | `clientCompany` | no (blank → not counted for any account) |
+| `createdAt` | no (blank/unparseable → excluded from the growth chart, still counted in the total) |
 
 This export tends to carry a lot more than that (name, email, phone, date
 of birth, IP address, device info, subscription status, and more) — none
 of it is read. `clientCompany` is normalized the same way `payer_name` is
 in claims data (e.g. any case of "horizon" → "Horizon"), so the two sources
-line up under the same account names. Re-uploading the file, or a later
-export that repeats the same `userId`, updates that row in place rather
-than double-counting it — tracked separately from claims duplicates as
-"registered patient records updated" in the header, since a userId match
-and a claim match are different things.
+line up under the same account names. `createdAt` is expected as a plain
+ISO 8601 UTC timestamp (e.g. `2026-08-30T21:44:29.504Z`, the format this
+export has consistently used) — read as the patient's registration date,
+which drives the "Registered patient growth" chart. Re-uploading the file,
+or a later export that repeats the same `userId`, updates that row in
+place rather than double-counting it — tracked separately from claims
+duplicates as "registered patient records updated" in the header, since a
+userId match and a claim match are different things.
 
 There's no shared ID between this export and claims data — `userId` (this
 export) and `external_patient_id` (claims) come from different systems and

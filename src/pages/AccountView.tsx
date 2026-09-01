@@ -6,6 +6,7 @@ import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
+  computeCumulativeRegisteredPatients,
   computeMetrics,
   computeShareOfTotal,
   filterByRange,
@@ -26,10 +27,11 @@ interface AccountViewProps {
 
 export default function AccountView({ rows, registeredPatients, account, preset }: AccountViewProps) {
   const accountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
-  const registeredCount = useMemo(
-    () => registeredPatients.filter((p) => p.company === account).length,
+  const registeredForAccount = useMemo(
+    () => registeredPatients.filter((p) => p.company === account),
     [registeredPatients, account]
   );
+  const registeredCount = registeredForAccount.length;
   // All-time, not date-range filtered — comparing a registered total (which isn't
   // date-scoped) against a narrower filtered active count would overstate the gap.
   const allTimeActivePatients = useMemo(() => new Set(accountRows.map((r) => r.patientId)).size, [accountRows]);
@@ -39,6 +41,18 @@ export default function AccountView({ rows, registeredPatients, account, preset 
   const months = useMemo(() => monthsForRange(accountRows, range), [accountRows, range]);
   const metrics = useMemo(() => computeMetrics(filtered, months, accountRows), [filtered, months, accountRows]);
   const share = useMemo(() => computeShareOfTotal(filtered, filterByRange(rows, range), months), [filtered, rows, range, months]);
+
+  // Registered-patient growth — the primary patient-growth metric (registered,
+  // not billed/active). Only patients with a parseable registration date can be
+  // placed on the timeline; the rest still count toward the raw total elsewhere.
+  const datedRegistered = useMemo(
+    () => registeredForAccount.filter((p): p is typeof p & { registeredAt: Date } => p.registeredAt != null),
+    [registeredForAccount]
+  );
+  const registeredGrowth = useMemo(
+    () => computeCumulativeRegisteredPatients(datedRegistered, months),
+    [datedRegistered, months]
+  );
 
   const latestShare = share.length > 0 ? share[share.length - 1].sharePct : null;
 
@@ -140,7 +154,15 @@ export default function AccountView({ rows, registeredPatients, account, preset 
         <ChartCard title="New patients per month">
           <SimpleBarChart data={metrics.newPatientsByMonth} xKey="label" yKey="count" color={SERIES_COLORS[1]} />
         </ChartCard>
-        <ChartCard title="Cumulative patient growth" subtitle={`Running total of ${account} patients`}>
+        {datedRegistered.length > 0 && (
+          <ChartCard title="Registered patient growth" subtitle={`Running total of registered ${account} patients`}>
+            <SimpleLineChart data={registeredGrowth} xKey="label" yKey="total" color={SERIES_COLORS[1]} />
+          </ChartCard>
+        )}
+        <ChartCard
+          title="Active (billed) patient growth"
+          subtitle={`Running total of ${account} patients seen/billed`}
+        >
           <SimpleLineChart data={metrics.cumulativePatients} xKey="label" yKey="total" color={SERIES_COLORS[1]} />
         </ChartCard>
       </div>

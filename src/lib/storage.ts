@@ -1,4 +1,4 @@
-import type { AppointmentRow, ParsedDataset } from './types';
+import type { AppointmentRow, ParsedDataset, RegisteredPatientRow } from './types';
 
 // v2: switched from scheduling-export rows to claims rows (different shape) —
 // bumped so any old-format data cached in a browser is cleanly ignored
@@ -9,8 +9,13 @@ interface SerializedRow extends Omit<AppointmentRow, 'scheduledFor'> {
   scheduledFor: string;
 }
 
-export interface SerializedDataset extends Omit<ParsedDataset, 'rows'> {
+interface SerializedRegisteredPatientRow extends Omit<RegisteredPatientRow, 'registeredAt'> {
+  registeredAt: string | null;
+}
+
+export interface SerializedDataset extends Omit<ParsedDataset, 'rows' | 'registeredPatients'> {
   rows: SerializedRow[];
+  registeredPatients: SerializedRegisteredPatientRow[];
 }
 
 // Shared by localStorage persistence and the export/import snapshot feature —
@@ -21,6 +26,10 @@ export function serializeDataset(dataset: ParsedDataset): SerializedDataset {
     rows: dataset.rows.map((row) => ({
       ...row,
       scheduledFor: row.scheduledFor.toISOString(),
+    })),
+    registeredPatients: dataset.registeredPatients.map((p) => ({
+      ...p,
+      registeredAt: p.registeredAt ? p.registeredAt.toISOString() : null,
     })),
   };
 }
@@ -34,7 +43,10 @@ export function deserializeDataset(serialized: SerializedDataset): ParsedDataset
     })),
     // Older cached data / snapshot files predate these fields — default so the
     // rest of the app can always assume they're present, not undefined.
-    registeredPatients: serialized.registeredPatients ?? [],
+    registeredPatients: (serialized.registeredPatients ?? []).map((p) => ({
+      ...p,
+      registeredAt: p.registeredAt ? new Date(p.registeredAt) : null,
+    })),
     registeredDuplicateCount: serialized.registeredDuplicateCount ?? 0,
   };
 }

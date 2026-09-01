@@ -278,6 +278,31 @@ export function computeMetrics(
   };
 }
 
+/**
+ * Cumulative registered-patient growth curve over the given months, seeded
+ * with anyone who registered before the visible range — same shape and
+ * "prior patients" seeding convention as computeMetrics' cumulativePatients,
+ * so the two curves plot on directly comparable axes. Patients with no
+ * parseable registration date aren't in `patients` filtered — this function
+ * expects already-filtered rows with a non-null registeredAt.
+ */
+export function computeCumulativeRegisteredPatients(
+  patients: { registeredAt: Date }[],
+  months: string[]
+): { month: string; label: string; total: number }[] {
+  const countsByMonth = new Map<string, number>();
+  for (const p of patients) {
+    const m = monthKey(p.registeredAt);
+    countsByMonth.set(m, (countsByMonth.get(m) ?? 0) + 1);
+  }
+  const priorCount = patients.filter((p) => months.length === 0 || monthKey(p.registeredAt) < months[0]).length;
+  let running = priorCount;
+  return months.map((m) => {
+    running += countsByMonth.get(m) ?? 0;
+    return { month: m, label: monthLabel(m), total: running };
+  });
+}
+
 /** Share of total sessions each month that belong to `accountRows`, computed against `allRows`. */
 export function computeShareOfTotal(
   accountRows: AppointmentRow[],
