@@ -80,7 +80,6 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
         : null;
 
     const firstPoint = metrics.sessionsByMonth[0];
-    const monthsSinceFirst = months.indexOf(lastKey) + 1;
 
     let running = 0;
     const cumulativeRevenue = metrics.revenueByMonth.map((p) => {
@@ -117,7 +116,6 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
       actualMonthsBack,
       firstLabel: firstPoint.label,
       firstCount: firstPoint.total as number,
-      monthsSinceFirst,
       cumulativeRevenue,
       eoyProjection,
       avgRevenuePerPatient: metrics.uniquePatients > 0 ? metrics.revenue / metrics.uniquePatients : null,
@@ -178,12 +176,6 @@ export default function InvestorView({ rows, account }: InvestorViewProps) {
           label="Revenue to date"
           value={formatCurrency(metrics.revenue)}
           sub={`${metrics.totalSessions.toLocaleString()} sessions · ${metrics.uniquePatients.toLocaleString()} patients`}
-          accent={ACCENT}
-        />
-        <HeroStat
-          label="Time to traction"
-          value={`${stats.monthsSinceFirst} mo`}
-          sub={`Since first session in ${stats.firstLabel}`}
           accent={ACCENT}
         />
         <HeroStat
