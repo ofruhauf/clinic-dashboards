@@ -7,6 +7,8 @@ import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
   addMonths,
+  BOOKED_SERIES_LABEL,
+  computeBookedByMonth,
   computeBookedPipeline,
   computeCumulativeRegisteredPatients,
   computeMetrics,
@@ -90,6 +92,15 @@ export default function InvestorView({ rows, registeredPatients, bookedSessions,
     [bookedSessions, account]
   );
   const bookedPipeline = useMemo(() => computeBookedPipeline(bookedForAccount), [bookedForAccount]);
+  const bookedByMonth = useMemo(() => computeBookedByMonth(bookedForAccount), [bookedForAccount]);
+  const monthlyRevenueWithProjection = useMemo(() => {
+    if (bookedByMonth.length === 0) return metrics.revenueByMonth;
+    const existingMonths = new Set(metrics.revenueByMonth.map((p) => p.month));
+    const projectedPoints = bookedByMonth
+      .filter((b) => !existingMonths.has(b.month))
+      .map((b) => ({ month: b.month, label: b.label, revenue: 0, [BOOKED_SERIES_LABEL]: b.projectedRevenue }));
+    return [...metrics.revenueByMonth, ...projectedPoints];
+  }, [metrics.revenueByMonth, bookedByMonth]);
 
   const stats = useMemo(() => {
     const completeMonths = excludeCurrentMonth(months);
@@ -375,14 +386,23 @@ export default function InvestorView({ rows, registeredPatients, bookedSessions,
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <ChartCard title="Monthly revenue" subtitle="Actual billed amount">
+        <ChartCard
+          title="Monthly revenue"
+          subtitle={
+            bookedByMonth.length > 0
+              ? 'Actual billed amount · dashed bars are projected revenue from upcoming bookings (est. $140/session)'
+              : 'Actual billed amount'
+          }
+        >
           <SimpleBarChart
-            data={metrics.revenueByMonth}
+            data={monthlyRevenueWithProjection}
             xKey="label"
             yKey="revenue"
             color={ACCENT}
             valueFormatter={formatCurrency}
             tickFormatter={formatCurrencyCompact}
+            actualLabel="Billed"
+            projected={bookedByMonth.length > 0 ? { key: BOOKED_SERIES_LABEL, label: BOOKED_SERIES_LABEL } : undefined}
           />
         </ChartCard>
         <ChartCard title="Share of clinic volume" subtitle={`${account} as % of all sessions — growing, not cannibalizing`}>

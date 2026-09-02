@@ -23,6 +23,13 @@ export const AXIS_LINE = '#c3c2b7';
 export const GOOD = '#006300';
 export const CRITICAL = '#d03b3b';
 
+// Reserved for "projected / not yet real" chart segments (e.g. booked-but-
+// not-yet-billed sessions) — a neutral tone deliberately outside the
+// categorical rotation, so a projected series never reads as a new
+// category. Always paired with a dashed stroke, reduced fill opacity, and
+// an explicit "(upcoming)" legend/tooltip label — never color alone.
+export const PROJECTED = '#898781';
+
 export function seriesColor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length];
 }

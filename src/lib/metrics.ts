@@ -323,6 +323,17 @@ export interface BookedPipelineSummary {
   projectedRevenue: number;
 }
 
+type BookedSessionLike = { patient: string; scheduledFor: Date; status: string };
+
+function normalizePatientKey(patient: string): string {
+  return patient.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Sessions still ahead of `now` and not cancelled/no-show — shared by the summary and monthly-breakdown functions below. */
+function upcomingBookedSessions(bookedSessions: BookedSessionLike[], now: Date): BookedSessionLike[] {
+  return bookedSessions.filter((b) => b.scheduledFor > now && isActiveBookedStatus(b.status));
+}
+
 /**
  * Summarizes booked-but-not-yet-billed sessions for one account: how many
  * are still ahead of `now` and not cancelled, how many distinct patients
@@ -332,17 +343,56 @@ export interface BookedPipelineSummary {
  * haven't happened yet). No stable patient ID exists in this export, so
  * unique patients are counted by normalized display name.
  */
-export function computeBookedPipeline(
-  bookedSessions: { patient: string; scheduledFor: Date; status: string }[],
-  now: Date = new Date()
-): BookedPipelineSummary {
-  const upcoming = bookedSessions.filter((b) => b.scheduledFor > now && isActiveBookedStatus(b.status));
-  const uniquePatients = new Set(upcoming.map((b) => b.patient.trim().toLowerCase().replace(/\s+/g, ' '))).size;
+export function computeBookedPipeline(bookedSessions: BookedSessionLike[], now: Date = new Date()): BookedPipelineSummary {
+  const upcoming = upcomingBookedSessions(bookedSessions, now);
+  const uniquePatients = new Set(upcoming.map((b) => normalizePatientKey(b.patient))).size;
   return {
     upcomingCount: upcoming.length,
     uniquePatients,
     projectedRevenue: upcoming.length * AVG_BOOKED_SESSION_REVENUE,
   };
+}
+
+// Shared key/label for the projected/booked series added to chart data —
+// used as the object key itself (like visit-type series already do), and
+// doubles as the legend/tooltip label so no separate label map is needed.
+export const BOOKED_SERIES_LABEL = 'Booked (upcoming)';
+
+export interface BookedMonthlyBucket {
+  month: string;
+  label: string;
+  sessionCount: number;
+  uniquePatients: number;
+  projectedRevenue: number;
+}
+
+/**
+ * The forward-looking counterpart to sessionsByMonth/revenueByMonth/
+ * newPatientsByMonth: upcoming booked sessions bucketed by month, sorted
+ * ascending. Used to append a visually-distinct "projected" tail to those
+ * charts — never folded into the actual/historical monthly series, since
+ * it comes from a different system (the scheduling CRM) at a different
+ * confidence level (nothing here has happened or been billed yet).
+ */
+export function computeBookedByMonth(bookedSessions: BookedSessionLike[], now: Date = new Date()): BookedMonthlyBucket[] {
+  const upcoming = upcomingBookedSessions(bookedSessions, now);
+  const byMonth = new Map<string, { count: number; patients: Set<string> }>();
+  for (const b of upcoming) {
+    const m = monthKey(b.scheduledFor);
+    const bucket = byMonth.get(m) ?? { count: 0, patients: new Set<string>() };
+    bucket.count += 1;
+    bucket.patients.add(normalizePatientKey(b.patient));
+    byMonth.set(m, bucket);
+  }
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([m, bucket]) => ({
+      month: m,
+      label: monthLabel(m),
+      sessionCount: bucket.count,
+      uniquePatients: bucket.patients.size,
+      projectedRevenue: bucket.count * AVG_BOOKED_SESSION_REVENUE,
+    }));
 }
 
 /** Share of total sessions each month that belong to `accountRows`, computed against `allRows`. */

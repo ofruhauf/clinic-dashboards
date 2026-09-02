@@ -307,6 +307,30 @@ This is explicitly an estimate for sessions that haven't happened yet, kept
 separate everywhere from actual billed revenue (which always comes from
 real claim amounts), and disclosed as such in the Investor View footer.
 
+Beyond the hero stat, the booked pipeline also appears directly on the
+sessions/revenue/patients charts as a trailing, visually-distinct
+"Booked (upcoming)" bar for any future month it has data for — solid gray
+(not one of the categorical visit-type colors), reduced fill opacity, and a
+dashed border, always with its own legend entry so it never reads as an
+extra actual data point:
+
+- **Horizon sessions by month** (account view) — an extra bar segment for
+  upcoming booked sessions.
+- **Revenue by month** (account view) and **Monthly revenue** (Investor
+  View) — an extra bar for projected revenue.
+- **New patients per month** (account view) — an extra bar for unique
+  patients with an upcoming booking (subtitle disclosed as "not
+  necessarily new," since a booked patient could already be an active one).
+
+Deliberately *not* added: the "Cumulative revenue" hero chart on Investor
+View (it already carries its own separate EOY-target projection via the
+"Projected · December" callout, and stacking two different kinds of
+projection on one chart would confuse rather than clarify) and the
+cumulative patient-growth line charts (there's no reliable way to tell
+whether a booked patient is already counted in a claims- or registered-
+patient-based running total, since neither system shares an ID with the
+booked-sessions export).
+
 ## Tech
 
 Vite + React + TypeScript, [Recharts](https://recharts.org) for charts,

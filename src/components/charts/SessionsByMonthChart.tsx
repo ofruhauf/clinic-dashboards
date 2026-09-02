@@ -9,15 +9,16 @@ import {
   YAxis,
 } from 'recharts';
 import type { MonthlySeriesPoint } from '../../lib/metrics';
-import { AXIS_LINE, GRIDLINE, INK_MUTED, INK_PRIMARY, seriesColor } from '../../lib/theme';
+import { AXIS_LINE, GRIDLINE, INK_MUTED, INK_PRIMARY, PROJECTED, seriesColor } from '../../lib/theme';
 
 interface Props {
   data: MonthlySeriesPoint[];
   seriesKeys: string[];
+  projectedKey?: string; // data key for upcoming booked sessions — 0 on actual months, set on future months
 }
 
-export default function SessionsByMonthChart({ data, seriesKeys }: Props) {
-  const singleSeries = seriesKeys.length <= 1;
+export default function SessionsByMonthChart({ data, seriesKeys, projectedKey }: Props) {
+  const singleSeries = seriesKeys.length <= 1 && !projectedKey;
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -49,10 +50,23 @@ export default function SessionsByMonthChart({ data, seriesKeys }: Props) {
             dataKey={key}
             stackId="sessions"
             fill={seriesColor(i)}
-            radius={i === seriesKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+            radius={!projectedKey && i === seriesKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
             maxBarSize={40}
           />
         ))}
+        {projectedKey && (
+          <Bar
+            dataKey={projectedKey}
+            stackId="sessions"
+            fill={PROJECTED}
+            fillOpacity={0.35}
+            stroke={PROJECTED}
+            strokeDasharray="4 3"
+            strokeWidth={1.5}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={40}
+          />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );

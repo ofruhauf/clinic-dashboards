@@ -6,6 +6,8 @@ import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
+  BOOKED_SERIES_LABEL,
+  computeBookedByMonth,
   computeBookedPipeline,
   computeCumulativeRegisteredPatients,
   computeMetrics,
@@ -13,6 +15,7 @@ import {
   filterByRange,
   monthsForRange,
   resolveDateRange,
+  type MonthlySeriesPoint,
 } from '../lib/metrics';
 import type { AppointmentRow, BookedSessionRow, DateRangePreset, RegisteredPatientRow } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
@@ -63,6 +66,45 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
     [bookedSessions, account]
   );
   const bookedPipeline = useMemo(() => computeBookedPipeline(bookedForAccount), [bookedForAccount]);
+
+  // Forward-looking monthly breakdown of the same booked pipeline, appended
+  // as a visually-distinct tail to the sessions/revenue/patients charts
+  // below — never merged into the actual historical series, since it comes
+  // from a different system (the scheduling CRM) and nothing in it has
+  // happened or been billed yet.
+  const bookedByMonth = useMemo(() => computeBookedByMonth(bookedForAccount), [bookedForAccount]);
+
+  const sessionsByMonthWithProjection = useMemo(() => {
+    if (bookedByMonth.length === 0) return metrics.sessionsByMonth;
+    const existingMonths = new Set(metrics.sessionsByMonth.map((p) => p.month));
+    const projectedPoints: MonthlySeriesPoint[] = bookedByMonth
+      .filter((b) => !existingMonths.has(b.month))
+      .map((b) => {
+        const point: MonthlySeriesPoint = { month: b.month, label: b.label, total: b.sessionCount };
+        for (const key of metrics.seriesKeys) point[key] = 0;
+        point[BOOKED_SERIES_LABEL] = b.sessionCount;
+        return point;
+      });
+    return [...metrics.sessionsByMonth, ...projectedPoints];
+  }, [metrics.sessionsByMonth, metrics.seriesKeys, bookedByMonth]);
+
+  const revenueByMonthWithProjection = useMemo(() => {
+    if (bookedByMonth.length === 0) return metrics.revenueByMonth;
+    const existingMonths = new Set(metrics.revenueByMonth.map((p) => p.month));
+    const projectedPoints = bookedByMonth
+      .filter((b) => !existingMonths.has(b.month))
+      .map((b) => ({ month: b.month, label: b.label, revenue: 0, [BOOKED_SERIES_LABEL]: b.projectedRevenue }));
+    return [...metrics.revenueByMonth, ...projectedPoints];
+  }, [metrics.revenueByMonth, bookedByMonth]);
+
+  const newPatientsByMonthWithProjection = useMemo(() => {
+    if (bookedByMonth.length === 0) return metrics.newPatientsByMonth;
+    const existingMonths = new Set(metrics.newPatientsByMonth.map((p) => p.month));
+    const projectedPoints = bookedByMonth
+      .filter((b) => !existingMonths.has(b.month))
+      .map((b) => ({ month: b.month, label: b.label, count: 0, [BOOKED_SERIES_LABEL]: b.uniquePatients }));
+    return [...metrics.newPatientsByMonth, ...projectedPoints];
+  }, [metrics.newPatientsByMonth, bookedByMonth]);
 
   const { hidden, toggle } = useStatVisibility('account');
 
@@ -147,8 +189,15 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <ChartCard title={`${account} sessions by month`} subtitle="By visit type">
-          <SessionsByMonthChart data={metrics.sessionsByMonth} seriesKeys={metrics.seriesKeys} />
+        <ChartCard
+          title={`${account} sessions by month`}
+          subtitle={bookedByMonth.length > 0 ? 'By visit type · dashed bars are upcoming booked sessions' : 'By visit type'}
+        >
+          <SessionsByMonthChart
+            data={sessionsByMonthWithProjection}
+            seriesKeys={metrics.seriesKeys}
+            projectedKey={bookedByMonth.length > 0 ? BOOKED_SERIES_LABEL : undefined}
+          />
         </ChartCard>
         <ChartCard title="Share of total sessions" subtitle={`${account} as % of all clinic sessions`}>
           <SimpleLineChart
@@ -162,18 +211,41 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <ChartCard title="Revenue by month" subtitle="Actual billed amount">
+        <ChartCard
+          title="Revenue by month"
+          subtitle={
+            bookedByMonth.length > 0
+              ? 'Actual billed amount · dashed bars are projected revenue from upcoming bookings (est. $140/session)'
+              : 'Actual billed amount'
+          }
+        >
           <SimpleBarChart
-            data={metrics.revenueByMonth}
+            data={revenueByMonthWithProjection}
             xKey="label"
             yKey="revenue"
             color={SERIES_COLORS[1]}
             valueFormatter={formatCurrency}
             tickFormatter={formatCurrencyCompact}
+            actualLabel="Billed"
+            projected={bookedByMonth.length > 0 ? { key: BOOKED_SERIES_LABEL, label: BOOKED_SERIES_LABEL } : undefined}
           />
         </ChartCard>
-        <ChartCard title="New patients per month">
-          <SimpleBarChart data={metrics.newPatientsByMonth} xKey="label" yKey="count" color={SERIES_COLORS[1]} />
+        <ChartCard
+          title="New patients per month"
+          subtitle={
+            bookedByMonth.length > 0
+              ? 'Dashed bars are patients with an upcoming booking (pipeline, not necessarily new)'
+              : undefined
+          }
+        >
+          <SimpleBarChart
+            data={newPatientsByMonthWithProjection}
+            xKey="label"
+            yKey="count"
+            color={SERIES_COLORS[1]}
+            actualLabel="New patients"
+            projected={bookedByMonth.length > 0 ? { key: BOOKED_SERIES_LABEL, label: BOOKED_SERIES_LABEL } : undefined}
+          />
         </ChartCard>
         {datedRegistered.length > 0 && (
           <ChartCard title="Registered patient growth" subtitle={`Running total of registered ${account} patients`}>
