@@ -64,27 +64,32 @@ also serve from `/clinic-dashboards/` rather than `/`.
    are counted as "claims updated by a later upload" in the header, whether
    or not the row's data actually changed.
 2. The **account view** (defaults to Horizon when present, the primary tab)
-   shows sessions, revenue, patients, and that account's share of total
-   clinic sessions over time. Use the account dropdown to switch to any
-   other payer in your data. (Show-up rate isn't in claims data, so it
-   displays as "—".) If a registered-patients export has also been uploaded
-   (see below), an extra **"Registered {account} patients"** card shows the
-   total who've registered with that payer — whether or not they've been
-   seen/billed yet — with a "N not yet booked" note when that total exceeds
-   the account's active (billed) patient count. Click **Customize stats**
-   (top right of the stat row) to show or hide any of these cards — nothing
-   here needs a code change; see below.
+   shows hero stats in this order: registered patients, patients treated
+   (billed), sessions, revenue, booked sessions (upcoming), new patients,
+   show-up rate. Use the account dropdown to switch to any other payer in
+   your data. (Show-up rate isn't in claims data, so it displays as "—".)
+   The **"Registered {account} patients"** card (once a registered-patients
+   export has been uploaded — see below) shows the total who've registered
+   with that payer, whether or not they've been seen/billed yet, with no
+   further breakdown on the card itself. The **"Booked sessions (upcoming)"**
+   card (once a booked-sessions CRM export has been uploaded) shows upcoming
+   session/patient counts and a projected-revenue estimate — see the
+   dedicated section below. Click **Customize stats** (top right of the stat
+   row) to show or hide any of these cards — nothing here needs a code
+   change; see below.
 
-   Two separate growth-over-time charts sit side by side: **"Registered
+   **"{account} sessions by month"** sits side by side with **"Registered
    patient growth"** (cumulative registrations, from the registered-patients
-   export's `createdAt`) and **"Active (billed) patient growth"** (cumulative
-   patients with a billed claim). **Registered patients is the primary
-   patient-growth metric** — it's the one to reach for by default when the
-   question is "how fast are we growing," since it captures everyone who's
-   signed up, not just who's been billed so far; the active/billed chart
-   stays as a secondary, clinically-useful view of who's actually been seen.
-   The registered chart only appears once at least one registered patient
-   for that account has a parseable registration date.
+   export's `createdAt`) — the registered chart only appears once at least
+   one registered patient for that account has a parseable registration
+   date, otherwise the sessions chart takes the full row. Further down,
+   **"Active (billed) patient growth"** (cumulative patients with a billed
+   claim) sits alongside "Revenue by month" and "New patients per month".
+   **Registered patients is the primary patient-growth metric** — it's the
+   one to reach for by default when the question is "how fast are we
+   growing," since it captures everyone who's signed up, not just who's
+   been billed so far; the active/billed chart stays as a secondary,
+   clinically-useful view of who's actually been seen.
 3. **Investor View** is a share-ready, single-account pitch page: a headline
    ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), hero stats (ARR
    run-rate, revenue growth MoM, revenue to date, patient LTV to date, and —

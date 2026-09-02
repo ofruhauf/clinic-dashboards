@@ -11,7 +11,6 @@ import {
   computeBookedPipeline,
   computeCumulativeRegisteredPatients,
   computeMetrics,
-  computeShareOfTotal,
   filterByRange,
   monthsForRange,
   resolveDateRange,
@@ -37,15 +36,11 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
     [registeredPatients, account]
   );
   const registeredCount = registeredForAccount.length;
-  // All-time, not date-range filtered — comparing a registered total (which isn't
-  // date-scoped) against a narrower filtered active count would overstate the gap.
-  const allTimeActivePatients = useMemo(() => new Set(accountRows.map((r) => r.patientId)).size, [accountRows]);
 
   const range = useMemo(() => resolveDateRange(preset, accountRows), [preset, accountRows]);
   const filtered = useMemo(() => filterByRange(accountRows, range), [accountRows, range]);
   const months = useMemo(() => monthsForRange(accountRows, range), [accountRows, range]);
   const metrics = useMemo(() => computeMetrics(filtered, months, accountRows), [filtered, months, accountRows]);
-  const share = useMemo(() => computeShareOfTotal(filtered, filterByRange(rows, range), months), [filtered, rows, range, months]);
 
   // Registered-patient growth — the primary patient-growth metric (registered,
   // not billed/active). Only patients with a parseable registration date can be
@@ -58,8 +53,6 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
     () => computeCumulativeRegisteredPatients(datedRegistered, months),
     [datedRegistered, months]
   );
-
-  const latestShare = share.length > 0 ? share[share.length - 1].sharePct : null;
 
   const bookedForAccount = useMemo(
     () => bookedSessions.filter((b) => b.account === account),
@@ -109,44 +102,30 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
   const { hidden, toggle } = useStatVisibility('account');
 
   const statCards = useMemo(() => {
-    const cards: { key: string; label: string; node: ReactNode }[] = [
-      { key: 'sessions', label: 'Sessions', node: <KpiCard label={`${account} sessions`} value={metrics.totalSessions.toLocaleString()} /> },
-      { key: 'revenue', label: 'Revenue', node: <KpiCard label={`${account} revenue`} value={formatCurrency(metrics.revenue)} /> },
-      { key: 'patients', label: 'Patients', node: <KpiCard label={`${account} patients`} value={metrics.uniquePatients.toLocaleString()} /> },
-      { key: 'newPatients', label: 'New patients', node: <KpiCard label="New patients" value={metrics.newPatients.toLocaleString()} /> },
-      {
-        key: 'showUpRate',
-        label: 'Show-up rate',
-        node: (
-          <KpiCard
-            label="Show-up rate"
-            value={metrics.showUpRate == null ? '—' : `${Math.round(metrics.showUpRate * 100)}%`}
-          />
-        ),
-      },
-      {
-        key: 'shareOfTotal',
-        label: 'Share of total sessions',
-        node: <KpiCard label="Share of total sessions" value={latestShare == null ? '—' : `${Math.round(latestShare)}%`} />,
-      },
-    ];
+    const cards: { key: string; label: string; node: ReactNode }[] = [];
+
     if (registeredCount > 0) {
       cards.push({
         key: 'registeredPatients',
         label: 'Registered patients',
-        node: (
-          <KpiCard
-            label={`Registered ${account} patients`}
-            value={registeredCount.toLocaleString()}
-            sub={
-              registeredCount > allTimeActivePatients
-                ? `${(registeredCount - allTimeActivePatients).toLocaleString()} not yet booked`
-                : 'All registered patients have booked'
-            }
-          />
-        ),
+        node: <KpiCard label={`Registered ${account} patients`} value={registeredCount.toLocaleString()} />,
       });
     }
+    cards.push({
+      key: 'patients',
+      label: 'Patients treated',
+      node: <KpiCard label="Patients treated" value={metrics.uniquePatients.toLocaleString()} />,
+    });
+    cards.push({
+      key: 'sessions',
+      label: 'Sessions',
+      node: <KpiCard label={`${account} sessions`} value={metrics.totalSessions.toLocaleString()} />,
+    });
+    cards.push({
+      key: 'revenue',
+      label: 'Revenue',
+      node: <KpiCard label={`${account} revenue`} value={formatCurrency(metrics.revenue)} />,
+    });
     if (bookedForAccount.length > 0) {
       cards.push({
         key: 'bookedPipeline',
@@ -160,8 +139,23 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
         ),
       });
     }
+    cards.push({
+      key: 'newPatients',
+      label: 'New patients',
+      node: <KpiCard label="New patients" value={metrics.newPatients.toLocaleString()} />,
+    });
+    cards.push({
+      key: 'showUpRate',
+      label: 'Show-up rate',
+      node: (
+        <KpiCard
+          label="Show-up rate"
+          value={metrics.showUpRate == null ? '—' : `${Math.round(metrics.showUpRate * 100)}%`}
+        />
+      ),
+    });
     return cards;
-  }, [account, metrics, latestShare, registeredCount, allTimeActivePatients, bookedForAccount, bookedPipeline]);
+  }, [account, metrics, registeredCount, bookedForAccount, bookedPipeline]);
 
   if (accountRows.length === 0) {
     return (
@@ -188,7 +182,13 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
           ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: datedRegistered.length > 0 ? '1fr 1fr' : '1fr',
+          gap: 16,
+        }}
+      >
         <ChartCard
           title={`${account} sessions by month`}
           subtitle={bookedByMonth.length > 0 ? 'By visit type · dashed bars are upcoming booked sessions' : 'By visit type'}
@@ -199,15 +199,11 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
             projectedKey={bookedByMonth.length > 0 ? BOOKED_SERIES_LABEL : undefined}
           />
         </ChartCard>
-        <ChartCard title="Share of total sessions" subtitle={`${account} as % of all clinic sessions`}>
-          <SimpleLineChart
-            data={share}
-            xKey="label"
-            yKey="sharePct"
-            color={SERIES_COLORS[1]}
-            valueFormatter={(v) => `${v.toFixed(1)}%`}
-          />
-        </ChartCard>
+        {datedRegistered.length > 0 && (
+          <ChartCard title="Registered patient growth" subtitle={`Running total of registered ${account} patients`}>
+            <SimpleLineChart data={registeredGrowth} xKey="label" yKey="total" color={SERIES_COLORS[1]} />
+          </ChartCard>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
@@ -247,11 +243,6 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
             projected={bookedByMonth.length > 0 ? { key: BOOKED_SERIES_LABEL, label: BOOKED_SERIES_LABEL } : undefined}
           />
         </ChartCard>
-        {datedRegistered.length > 0 && (
-          <ChartCard title="Registered patient growth" subtitle={`Running total of registered ${account} patients`}>
-            <SimpleLineChart data={registeredGrowth} xKey="label" yKey="total" color={SERIES_COLORS[1]} />
-          </ChartCard>
-        )}
         <ChartCard
           title="Active (billed) patient growth"
           subtitle={`Running total of ${account} patients seen/billed`}
