@@ -17,6 +17,8 @@ export default function KpiCard({ label, value, delta, sub }: KpiCardProps) {
         borderRadius: 12,
         padding: '16px 20px',
         minWidth: 0,
+        height: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <p style={{ fontSize: 12, fontWeight: 600, color: '#898781', textTransform: 'uppercase', letterSpacing: 0.3 }}>

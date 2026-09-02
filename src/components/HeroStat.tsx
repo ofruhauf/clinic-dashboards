@@ -15,6 +15,8 @@ export default function HeroStat({ label, value, sub, accent }: HeroStatProps) {
         borderRadius: 12,
         padding: '18px 20px',
         minWidth: 0,
+        height: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <p style={{ fontSize: 12, fontWeight: 700, color: '#898781', textTransform: 'uppercase', letterSpacing: 0.4 }}>
