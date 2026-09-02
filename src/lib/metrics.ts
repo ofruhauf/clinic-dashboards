@@ -303,6 +303,48 @@ export function computeCumulativeRegisteredPatients(
   });
 }
 
+// Flat per-session estimate used only for the booked (not-yet-billed) pipeline
+// projection — real billed revenue always comes from actual claim amounts,
+// never this. Update here if the real average session rate changes.
+export const AVG_BOOKED_SESSION_REVENUE = 140;
+
+// A booked session whose status indicates it isn't actually going to happen —
+// filtered out of the pipeline count so a cancelled/no-show row still present
+// in the export doesn't inflate the "upcoming" total.
+const INACTIVE_BOOKED_STATUSES = new Set(['cancelled', 'canceled', 'noshow', 'declined', 'rejected']);
+
+function isActiveBookedStatus(status: string): boolean {
+  return !INACTIVE_BOOKED_STATUSES.has(status.trim().toLowerCase().replace(/[\s_-]+/g, ''));
+}
+
+export interface BookedPipelineSummary {
+  upcomingCount: number;
+  uniquePatients: number;
+  projectedRevenue: number;
+}
+
+/**
+ * Summarizes booked-but-not-yet-billed sessions for one account: how many
+ * are still ahead of `now` and not cancelled, how many distinct patients
+ * that represents, and a rough revenue projection at a flat rate per
+ * session (real billed revenue is always the actual claim amount — this is
+ * an estimate for sessions that haven't been billed yet because they
+ * haven't happened yet). No stable patient ID exists in this export, so
+ * unique patients are counted by normalized display name.
+ */
+export function computeBookedPipeline(
+  bookedSessions: { patient: string; scheduledFor: Date; status: string }[],
+  now: Date = new Date()
+): BookedPipelineSummary {
+  const upcoming = bookedSessions.filter((b) => b.scheduledFor > now && isActiveBookedStatus(b.status));
+  const uniquePatients = new Set(upcoming.map((b) => b.patient.trim().toLowerCase().replace(/\s+/g, ' '))).size;
+  return {
+    upcomingCount: upcoming.length,
+    uniquePatients,
+    projectedRevenue: upcoming.length * AVG_BOOKED_SESSION_REVENUE,
+  };
+}
+
 /** Share of total sessions each month that belong to `accountRows`, computed against `allRows`. */
 export function computeShareOfTotal(
   accountRows: AppointmentRow[],

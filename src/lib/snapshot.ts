@@ -1,4 +1,4 @@
-import type { AppointmentRow, ParsedDataset, RegisteredPatientRow } from './types';
+import type { AppointmentRow, BookedSessionRow, ParsedDataset, RegisteredPatientRow } from './types';
 import { deserializeDataset, serializeDataset, type SerializedDataset } from './storage';
 
 /**
@@ -22,9 +22,12 @@ export function isSnapshotFile(file: File): boolean {
   return file.name.toLowerCase().endsWith('.json');
 }
 
-export async function parseSnapshotFile(
-  file: File
-): Promise<{ rows: AppointmentRow[]; registeredPatients: RegisteredPatientRow[]; skippedCount: number }> {
+export async function parseSnapshotFile(file: File): Promise<{
+  rows: AppointmentRow[];
+  registeredPatients: RegisteredPatientRow[];
+  bookedSessions: BookedSessionRow[];
+  skippedCount: number;
+}> {
   const text = await file.text();
   let parsed: SerializedDataset;
   try {
@@ -36,5 +39,10 @@ export async function parseSnapshotFile(
     throw new Error('Not a valid Agave dashboard snapshot file.');
   }
   const dataset = deserializeDataset(parsed);
-  return { rows: dataset.rows, registeredPatients: dataset.registeredPatients, skippedCount: 0 };
+  return {
+    rows: dataset.rows,
+    registeredPatients: dataset.registeredPatients,
+    bookedSessions: dataset.bookedSessions,
+    skippedCount: 0,
+  };
 }

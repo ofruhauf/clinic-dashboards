@@ -1,4 +1,4 @@
-import type { AppointmentRow, ParsedDataset, RegisteredPatientRow } from './types';
+import type { AppointmentRow, BookedSessionRow, ParsedDataset, RegisteredPatientRow } from './types';
 
 // Column names are matched case-insensitively with separators stripped, so
 // "Date of Service" and "date_of_service" both resolve the same way.
@@ -264,21 +264,36 @@ function mergeRegisteredPatients(
 
 /**
  * Single merge entry point for anything that can be uploaded: a claims
- * report (rows), a registered-users export (registeredPatients), or a full
- * snapshot (both). Whichever of `rows` / `registeredPatients` is present in
+ * report (rows), a registered-users export (registeredPatients), a
+ * booked-sessions CRM export (bookedSessions), or a full snapshot (any
+ * combination). Whichever of `rows` / `registeredPatients` is present in
  * `parsed` gets merged into the matching part of the existing dataset.
+ *
+ * `bookedSessions` is different: it's not merged/deduped row-by-row like the
+ * other two, it REPLACES whatever booked-sessions data already existed. A
+ * booked-sessions export is a snapshot of everything currently on the books
+ * as of the moment it was pulled — the previous upload's rows are simply
+ * stale (either already happened, or rescheduled/cancelled) by the time a
+ * fresh one arrives, so there's nothing meaningful to merge them against.
  */
 export function mergeIntoDataset(
   existing: ParsedDataset | null,
   fileName: string,
-  parsed: { rows?: AppointmentRow[]; registeredPatients?: RegisteredPatientRow[]; skippedCount: number }
+  parsed: {
+    rows?: AppointmentRow[];
+    registeredPatients?: RegisteredPatientRow[];
+    bookedSessions?: BookedSessionRow[];
+    skippedCount: number;
+  }
 ): ParsedDataset {
   const claimsResult = mergeClaimsRows(existing?.rows ?? [], parsed.rows ?? []);
   const patientsResult = mergeRegisteredPatients(existing?.registeredPatients ?? [], parsed.registeredPatients ?? []);
+  const bookedSessions = parsed.bookedSessions ?? existing?.bookedSessions ?? [];
 
   return {
     rows: claimsResult.rows,
     registeredPatients: patientsResult.registeredPatients,
+    bookedSessions,
     fileNames: [...(existing?.fileNames ?? []), fileName],
     uploadedAt: new Date().toISOString(),
     rowCount: claimsResult.rows.length,

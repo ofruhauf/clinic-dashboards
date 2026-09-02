@@ -6,6 +6,7 @@ import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
+  computeBookedPipeline,
   computeCumulativeRegisteredPatients,
   computeMetrics,
   computeShareOfTotal,
@@ -13,7 +14,7 @@ import {
   monthsForRange,
   resolveDateRange,
 } from '../lib/metrics';
-import type { AppointmentRow, DateRangePreset, RegisteredPatientRow } from '../lib/types';
+import type { AppointmentRow, BookedSessionRow, DateRangePreset, RegisteredPatientRow } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 import { useStatVisibility } from '../lib/useStatVisibility';
@@ -21,11 +22,12 @@ import { useStatVisibility } from '../lib/useStatVisibility';
 interface AccountViewProps {
   rows: AppointmentRow[];
   registeredPatients: RegisteredPatientRow[];
+  bookedSessions: BookedSessionRow[];
   account: string;
   preset: DateRangePreset;
 }
 
-export default function AccountView({ rows, registeredPatients, account, preset }: AccountViewProps) {
+export default function AccountView({ rows, registeredPatients, bookedSessions, account, preset }: AccountViewProps) {
   const accountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
   const registeredForAccount = useMemo(
     () => registeredPatients.filter((p) => p.company === account),
@@ -55,6 +57,12 @@ export default function AccountView({ rows, registeredPatients, account, preset 
   );
 
   const latestShare = share.length > 0 ? share[share.length - 1].sharePct : null;
+
+  const bookedForAccount = useMemo(
+    () => bookedSessions.filter((b) => b.account === account),
+    [bookedSessions, account]
+  );
+  const bookedPipeline = useMemo(() => computeBookedPipeline(bookedForAccount), [bookedForAccount]);
 
   const { hidden, toggle } = useStatVisibility('account');
 
@@ -97,8 +105,21 @@ export default function AccountView({ rows, registeredPatients, account, preset 
         ),
       });
     }
+    if (bookedForAccount.length > 0) {
+      cards.push({
+        key: 'bookedPipeline',
+        label: 'Booked sessions (upcoming)',
+        node: (
+          <KpiCard
+            label="Booked sessions (upcoming)"
+            value={bookedPipeline.upcomingCount.toLocaleString()}
+            sub={`${bookedPipeline.uniquePatients.toLocaleString()} patient${bookedPipeline.uniquePatients === 1 ? '' : 's'} · ~${formatCurrency(bookedPipeline.projectedRevenue)} projected (est. $140/session)`}
+          />
+        ),
+      });
+    }
     return cards;
-  }, [account, metrics, latestShare, registeredCount, allTimeActivePatients]);
+  }, [account, metrics, latestShare, registeredCount, allTimeActivePatients, bookedForAccount, bookedPipeline]);
 
   if (accountRows.length === 0) {
     return (

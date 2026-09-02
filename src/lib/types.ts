@@ -23,9 +23,22 @@ export interface RegisteredPatientRow {
   registeredAt: Date | null; // createdAt — when they registered; null if missing/unparseable
 }
 
+// Exported directly from the practice's scheduling CRM — appointments that are
+// booked but haven't happened (and so haven't been billed) yet. No stable
+// patient ID is available in this export, unlike claims/registered-patients,
+// so patient display name is the only identifier for unique-patient counts —
+// the same level of PHI the claims export already stores for patient names.
+export interface BookedSessionRow {
+  patient: string; // display name
+  account: string | null; // normalized insurance/payer name; null = none on file
+  scheduledFor: Date; // the future appointment's date/time
+  status: string; // raw CRM status (e.g. SCHEDULED, CONFIRMED, CANCELLED)
+}
+
 export interface ParsedDataset {
   rows: AppointmentRow[];
   registeredPatients: RegisteredPatientRow[];
+  bookedSessions: BookedSessionRow[];
   fileNames: string[]; // every file that has contributed rows, in upload order
   uploadedAt: string; // ISO, most recent upload
   rowCount: number;

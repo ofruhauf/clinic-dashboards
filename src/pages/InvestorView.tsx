@@ -7,6 +7,7 @@ import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
   addMonths,
+  computeBookedPipeline,
   computeCumulativeRegisteredPatients,
   computeMetrics,
   computeShareOfTotal,
@@ -14,13 +15,14 @@ import {
   monthLabel,
   monthsForRange,
 } from '../lib/metrics';
-import type { AppointmentRow, RegisteredPatientRow } from '../lib/types';
+import type { AppointmentRow, BookedSessionRow, RegisteredPatientRow } from '../lib/types';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 import { useStatVisibility } from '../lib/useStatVisibility';
 
 interface InvestorViewProps {
   rows: AppointmentRow[];
   registeredPatients: RegisteredPatientRow[];
+  bookedSessions: BookedSessionRow[];
   account: string;
 }
 
@@ -51,7 +53,7 @@ const ACCOUNT_ORGANIC_NOTE: Record<string, string> = {
 const PIPELINE_TARGETS = ['Highmark', 'BCBS NC', 'IDX'];
 const PIPELINE_COVERED_LIVES = '15M+';
 
-export default function InvestorView({ rows, registeredPatients, account }: InvestorViewProps) {
+export default function InvestorView({ rows, registeredPatients, bookedSessions, account }: InvestorViewProps) {
   const accountKey = account.toLowerCase();
   const launchDate = ACCOUNT_LAUNCH_DATES[accountKey];
   const eoyArrTarget = ACCOUNT_EOY_ARR_TARGET[accountKey];
@@ -83,6 +85,11 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
     () => computeCumulativeRegisteredPatients(datedRegistered, months),
     [datedRegistered, months]
   );
+  const bookedForAccount = useMemo(
+    () => bookedSessions.filter((b) => b.account === account),
+    [bookedSessions, account]
+  );
+  const bookedPipeline = useMemo(() => computeBookedPipeline(bookedForAccount), [bookedForAccount]);
 
   const stats = useMemo(() => {
     const completeMonths = excludeCurrentMonth(months);
@@ -222,8 +229,22 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
         ),
       });
     }
+    if (bookedForAccount.length > 0) {
+      cards.push({
+        key: 'bookedPipeline',
+        label: 'Booked pipeline (upcoming)',
+        node: (
+          <HeroStat
+            label="Booked pipeline (upcoming)"
+            value={bookedPipeline.upcomingCount.toLocaleString()}
+            sub={`${bookedPipeline.uniquePatients.toLocaleString()} patients · ~${formatCurrency(bookedPipeline.projectedRevenue)} projected (est. $140/session)`}
+            accent={ACCENT}
+          />
+        ),
+      });
+    }
     return cards;
-  }, [stats, metrics, registeredCount, account]);
+  }, [stats, metrics, registeredCount, account, bookedForAccount, bookedPipeline]);
 
   // A leading zero-value month makes both growth curves visibly start from
   // nothing rather than jumping in mid-climb — cosmetic only, not a claim
@@ -455,6 +476,14 @@ export default function InvestorView({ rows, registeredPatients, account }: Inve
             Registered patients comes from a separate product user database, not the claims/billing system, and
             uses its own patient IDs — the "not yet booked" figure is the difference between the two counts, not a
             per-patient match between systems.
+          </>
+        )}
+        {bookedForAccount.length > 0 && (
+          <>
+            {' '}
+            Booked pipeline comes from the scheduling CRM, not the claims/billing system — it counts upcoming,
+            non-cancelled appointments as of today. Its projected revenue is an estimate at a flat $140/session, not
+            actual billed amounts, since these sessions haven't happened (or been billed) yet.
           </>
         )}
       </p>

@@ -272,6 +272,41 @@ aren't linked. The "N not yet booked" figures shown in the account view and
 Investor View are the difference between the two *counts*, not a verified
 per-patient match — disclosed as such wherever the number appears.
 
+### Booked-sessions CRM export
+
+A third file type you can drop into the same upload panel: an export
+straight from the scheduling CRM listing sessions that are booked but
+haven't happened (and so haven't been billed) yet. It powers the "Booked
+sessions" / "Booked pipeline" stat on the account view and Investor View —
+how many upcoming sessions are on the books, how many distinct patients
+that represents, and a rough projected-revenue estimate.
+
+Columns read:
+
+| Column | Required |
+|---|---|
+| `user` | yes — patient display name (this export has no stable patient ID) |
+| `Insurance` | no (blank → not counted for any account) |
+| `scheduledFor` | yes — ISO 8601 timestamp of the appointment |
+| `status` | no (used only to exclude cancelled/no-show rows) |
+
+Unlike claims and registered-patients uploads, which merge new rows into
+what's already loaded, **uploading a booked-sessions file replaces the
+entire previous booked-sessions set.** This export is a snapshot of
+"everything currently on the books" as of the moment it was pulled from
+the CRM — by the time a fresh export arrives, the old one's rows are
+stale (the session either already happened or got rescheduled/cancelled),
+so there's nothing meaningful to merge them against.
+
+The "upcoming" count filters to sessions scheduled after right now and
+excludes cancelled/no-show statuses, so a past-dated or cancelled row still
+present in the export doesn't inflate the pipeline total. Projected revenue
+is a flat **$140 per session** estimate (`AVG_BOOKED_SESSION_REVENUE` in
+`src/lib/metrics.ts`) — update that constant if the real average changes.
+This is explicitly an estimate for sessions that haven't happened yet, kept
+separate everywhere from actual billed revenue (which always comes from
+real claim amounts), and disclosed as such in the Investor View footer.
+
 ## Tech
 
 Vite + React + TypeScript, [Recharts](https://recharts.org) for charts,
