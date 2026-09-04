@@ -363,6 +363,7 @@ export interface BookedMonthlyBucket {
   label: string;
   sessionCount: number;
   uniquePatients: number;
+  newUniquePatients: number;
   projectedRevenue: number;
 }
 
@@ -373,15 +374,36 @@ export interface BookedMonthlyBucket {
  * charts — never folded into the actual/historical monthly series, since
  * it comes from a different system (the scheduling CRM) at a different
  * confidence level (nothing here has happened or been billed yet).
+ *
+ * `existingPatientNames` is the account's full claims-history patient
+ * roster (display names, not date-filtered) — used to tell a genuinely new
+ * patient's upcoming booking apart from an existing/returning patient's.
+ * There's no shared ID between the booked-sessions export and claims data,
+ * so this match is by normalized display name and is therefore
+ * approximate (a name typo or a shared common name could mismatch).
+ * `newUniquePatients` counts a given patient only in the first future
+ * month they appear, even if they have bookings in multiple months.
  */
-export function computeBookedByMonth(bookedSessions: BookedSessionLike[], now: Date = new Date()): BookedMonthlyBucket[] {
-  const upcoming = upcomingBookedSessions(bookedSessions, now);
-  const byMonth = new Map<string, { count: number; patients: Set<string> }>();
+export function computeBookedByMonth(
+  bookedSessions: BookedSessionLike[],
+  existingPatientNames: string[] = [],
+  now: Date = new Date()
+): BookedMonthlyBucket[] {
+  const upcoming = [...upcomingBookedSessions(bookedSessions, now)].sort(
+    (a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime()
+  );
+  const seenBefore = new Set(existingPatientNames.map(normalizePatientKey));
+  const byMonth = new Map<string, { count: number; patients: Set<string>; newPatients: Set<string> }>();
   for (const b of upcoming) {
     const m = monthKey(b.scheduledFor);
-    const bucket = byMonth.get(m) ?? { count: 0, patients: new Set<string>() };
+    const bucket = byMonth.get(m) ?? { count: 0, patients: new Set<string>(), newPatients: new Set<string>() };
     bucket.count += 1;
-    bucket.patients.add(normalizePatientKey(b.patient));
+    const key = normalizePatientKey(b.patient);
+    bucket.patients.add(key);
+    if (!seenBefore.has(key)) {
+      bucket.newPatients.add(key);
+      seenBefore.add(key);
+    }
     byMonth.set(m, bucket);
   }
   return Array.from(byMonth.entries())
@@ -391,6 +413,7 @@ export function computeBookedByMonth(bookedSessions: BookedSessionLike[], now: D
       label: monthLabel(m),
       sessionCount: bucket.count,
       uniquePatients: bucket.patients.size,
+      newUniquePatients: bucket.newPatients.size,
       projectedRevenue: bucket.count * AVG_BOOKED_SESSION_REVENUE,
     }));
 }

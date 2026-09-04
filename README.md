@@ -323,9 +323,18 @@ extra actual data point:
   upcoming booked sessions.
 - **Revenue by month** (account view) and **Monthly revenue** (Investor
   View) — an extra bar for projected revenue.
-- **New patients per month** (account view) — an extra bar for unique
-  patients with an upcoming booking (subtitle disclosed as "not
-  necessarily new," since a booked patient could already be an active one).
+- **New patients per month** (account view) — an extra bar for upcoming
+  bookings from patients *not already in the account's claims history*
+  (matched by normalized display name against every claims row ever seen
+  for that account, not just the current date-range filter — there's no
+  shared ID between the two systems, so this match is approximate). A
+  patient booked for more than one future month only counts as new in the
+  earliest of them. A booked patient who's already been treated before
+  correctly contributes 0 here, even though they still count toward the
+  "Booked sessions (upcoming)" hero stat and the sessions/revenue
+  projections above (those intentionally count every upcoming booking
+  regardless of new-vs-returning, since pipeline volume and new-patient
+  acquisition are different questions).
 
 Deliberately *not* added: the "Cumulative revenue" hero chart on Investor
 View (it already carries its own separate EOY-target projection via the

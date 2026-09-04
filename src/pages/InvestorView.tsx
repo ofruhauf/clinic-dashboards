@@ -92,7 +92,10 @@ export default function InvestorView({ rows, registeredPatients, bookedSessions,
     [bookedSessions, account]
   );
   const bookedPipeline = useMemo(() => computeBookedPipeline(bookedForAccount), [bookedForAccount]);
-  const bookedByMonth = useMemo(() => computeBookedByMonth(bookedForAccount), [bookedForAccount]);
+  const bookedByMonth = useMemo(
+    () => computeBookedByMonth(bookedForAccount, allAccountRows.map((r) => r.patient)),
+    [bookedForAccount, allAccountRows]
+  );
   const monthlyRevenueWithProjection = useMemo(() => {
     if (bookedByMonth.length === 0) return metrics.revenueByMonth;
     const existingMonths = new Set(metrics.revenueByMonth.map((p) => p.month));

@@ -64,8 +64,13 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
   // as a visually-distinct tail to the sessions/revenue/patients charts
   // below — never merged into the actual historical series, since it comes
   // from a different system (the scheduling CRM) and nothing in it has
-  // happened or been billed yet.
-  const bookedByMonth = useMemo(() => computeBookedByMonth(bookedForAccount), [bookedForAccount]);
+  // happened or been billed yet. accountRows (not the date-range-filtered
+  // `filtered`) is the full existing-patient roster, so "new" means never
+  // treated before, regardless of the current date-range dropdown.
+  const bookedByMonth = useMemo(
+    () => computeBookedByMonth(bookedForAccount, accountRows.map((r) => r.patient)),
+    [bookedForAccount, accountRows]
+  );
 
   const sessionsByMonthWithProjection = useMemo(() => {
     if (bookedByMonth.length === 0) return metrics.sessionsByMonth;
@@ -95,7 +100,7 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
     const existingMonths = new Set(metrics.newPatientsByMonth.map((p) => p.month));
     const projectedPoints = bookedByMonth
       .filter((b) => !existingMonths.has(b.month))
-      .map((b) => ({ month: b.month, label: b.label, count: 0, [BOOKED_SERIES_LABEL]: b.uniquePatients }));
+      .map((b) => ({ month: b.month, label: b.label, count: 0, [BOOKED_SERIES_LABEL]: b.newUniquePatients }));
     return [...metrics.newPatientsByMonth, ...projectedPoints];
   }, [metrics.newPatientsByMonth, bookedByMonth]);
 
@@ -230,7 +235,7 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
           title="New patients per month"
           subtitle={
             bookedByMonth.length > 0
-              ? 'Dashed bars are patients with an upcoming booking (pipeline, not necessarily new)'
+              ? "Dashed bars are upcoming bookings from patients not already in this account's history (matched by name — approximate)"
               : undefined
           }
         >
