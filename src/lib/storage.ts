@@ -1,9 +1,11 @@
-import type { AppointmentRow, BookedSessionRow, ParsedDataset, RegisteredPatientRow } from './types';
+import type { AppointmentRow, ParsedDataset, RegisteredPatientRow, SessionRow } from './types';
 
-// v2: switched from scheduling-export rows to claims rows (different shape) —
+// v3: the booked-sessions (future-only) export was replaced by a sessions
+// export covering every session past and scheduled, with a different shape
+// (adds title/showUp) and a different meaning (no longer "just upcoming") —
 // bumped so any old-format data cached in a browser is cleanly ignored
 // rather than loaded and misread.
-const STORAGE_KEY = 'agave-dashboard:dataset:v2';
+const STORAGE_KEY = 'agave-dashboard:dataset:v3';
 
 interface SerializedRow extends Omit<AppointmentRow, 'scheduledFor'> {
   scheduledFor: string;
@@ -13,15 +15,15 @@ interface SerializedRegisteredPatientRow extends Omit<RegisteredPatientRow, 'reg
   registeredAt: string | null;
 }
 
-interface SerializedBookedSessionRow extends Omit<BookedSessionRow, 'scheduledFor'> {
+interface SerializedSessionRow extends Omit<SessionRow, 'scheduledFor'> {
   scheduledFor: string;
 }
 
 export interface SerializedDataset
-  extends Omit<ParsedDataset, 'rows' | 'registeredPatients' | 'bookedSessions'> {
+  extends Omit<ParsedDataset, 'rows' | 'registeredPatients' | 'sessions'> {
   rows: SerializedRow[];
   registeredPatients: SerializedRegisteredPatientRow[];
-  bookedSessions: SerializedBookedSessionRow[];
+  sessions: SerializedSessionRow[];
 }
 
 // Shared by localStorage persistence and the export/import snapshot feature —
@@ -37,9 +39,9 @@ export function serializeDataset(dataset: ParsedDataset): SerializedDataset {
       ...p,
       registeredAt: p.registeredAt ? p.registeredAt.toISOString() : null,
     })),
-    bookedSessions: dataset.bookedSessions.map((b) => ({
-      ...b,
-      scheduledFor: b.scheduledFor.toISOString(),
+    sessions: dataset.sessions.map((s) => ({
+      ...s,
+      scheduledFor: s.scheduledFor.toISOString(),
     })),
   };
 }
@@ -57,9 +59,9 @@ export function deserializeDataset(serialized: SerializedDataset): ParsedDataset
       ...p,
       registeredAt: p.registeredAt ? new Date(p.registeredAt) : null,
     })),
-    bookedSessions: (serialized.bookedSessions ?? []).map((b) => ({
-      ...b,
-      scheduledFor: new Date(b.scheduledFor),
+    sessions: (serialized.sessions ?? []).map((s) => ({
+      ...s,
+      scheduledFor: new Date(s.scheduledFor),
     })),
     registeredDuplicateCount: serialized.registeredDuplicateCount ?? 0,
   };

@@ -1,4 +1,4 @@
-import type { AppointmentRow, DateRange } from './types';
+import type { AppointmentRow, DateRange, SessionRow } from './types';
 
 export const SELF_PAY_LABEL = 'Self-pay';
 const OTHER_LABEL = 'Other';
@@ -38,7 +38,11 @@ export function accountLabel(account: string | null): string {
   return account ?? SELF_PAY_LABEL;
 }
 
-export function filterByRange(rows: AppointmentRow[], range: DateRange): AppointmentRow[] {
+interface Scheduled {
+  scheduledFor: Date;
+}
+
+export function filterByRange<T extends Scheduled>(rows: T[], range: DateRange): T[] {
   if (!range.start && !range.end) return rows;
   return rows.filter((row) => {
     if (range.start && row.scheduledFor < range.start) return false;
@@ -48,13 +52,13 @@ export function filterByRange(rows: AppointmentRow[], range: DateRange): Appoint
 }
 
 /** Latest scheduled appointment date across `rows`, or null if empty. */
-export function latestDate(rows: AppointmentRow[]): Date | null {
+export function latestDate<T extends Scheduled>(rows: T[]): Date | null {
   if (rows.length === 0) return null;
   return rows.reduce((max, r) => (r.scheduledFor > max ? r.scheduledFor : max), rows[0].scheduledFor);
 }
 
 /** Range covering the last `n` months ending with the month of the latest row (inclusive). */
-export function lastNMonthsRange(n: number, rows: AppointmentRow[]): DateRange {
+export function lastNMonthsRange<T extends Scheduled>(n: number, rows: T[]): DateRange {
   const latest = latestDate(rows);
   if (!latest) return { start: null, end: null };
   const endOfMonth = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() + 1, 0, 23, 59, 59));
@@ -62,7 +66,7 @@ export function lastNMonthsRange(n: number, rows: AppointmentRow[]): DateRange {
   return { start, end: endOfMonth };
 }
 
-export function resolveDateRange(preset: string, rows: AppointmentRow[]): DateRange {
+export function resolveDateRange<T extends Scheduled>(preset: string, rows: T[]): DateRange {
   const latest = latestDate(rows);
   if (!latest) return { start: null, end: null };
   const endOfMonth = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() + 1, 0, 23, 59, 59));
@@ -96,7 +100,7 @@ export function excludeCurrentMonth(months: string[], now: Date = new Date()): s
 }
 
 /** Continuous month axis covering `range`, falling back to the full span of `rows` for an open range. */
-export function monthsForRange(rows: AppointmentRow[], range: DateRange): string[] {
+export function monthsForRange<T extends Scheduled>(rows: T[], range: DateRange): string[] {
   if (range.start && range.end) {
     return monthRange(monthKey(range.start), monthKey(range.end));
   }
@@ -276,6 +280,54 @@ export function computeMetrics(
     revenue,
     revenueByMonth,
   };
+}
+
+export interface SessionMetrics {
+  totalSessions: number;
+  showUpRate: number | null;
+  sessionsByMonth: MonthlySeriesPoint[];
+  seriesKeys: string[];
+}
+
+/**
+ * Session count, visit-type breakdown, and show-up rate computed from the
+ * scheduling CRM's sessions export — every session, past and scheduled, not
+ * just what's been billed. This is the dashboard's primary source for these
+ * three figures: more complete and current than claims (which only reflects
+ * what's been submitted for billing so far, and has no show-up outcome at
+ * all). Revenue, patient identity/counting, and patient-growth curves stay
+ * claims-based (only claims has a real charge amount and a stable patient
+ * ID) — this function deliberately doesn't touch those.
+ */
+export function computeSessionMetrics(rows: SessionRow[], months: string[]): SessionMetrics {
+  const totalSessions = rows.length;
+
+  const shown = rows.filter((r) => r.showUp !== null);
+  const showUpRate = shown.length > 0 ? shown.filter((r) => r.showUp).length / shown.length : null;
+
+  const titleTotals = new Map<string, number>();
+  for (const row of rows) titleTotals.set(row.title, (titleTotals.get(row.title) ?? 0) + 1);
+  const keptTitles = new Set(topCategories(titleTotals, MAX_SERIES).keys());
+  const seriesKeys = Array.from(keptTitles);
+
+  const byMonth = new Map<string, MonthlySeriesPoint>();
+  for (const m of months) {
+    const point: MonthlySeriesPoint = { month: m, label: monthLabel(m), total: 0 };
+    for (const key of seriesKeys) point[key] = 0;
+    byMonth.set(m, point);
+  }
+  for (const row of rows) {
+    const m = monthKey(row.scheduledFor);
+    const point = byMonth.get(m);
+    if (point) {
+      const seriesKey = keptTitles.has(row.title) ? row.title : OTHER_LABEL;
+      point[seriesKey] = ((point[seriesKey] as number) ?? 0) + 1;
+      point.total = (point.total as number) + 1;
+    }
+  }
+  const sessionsByMonth = months.map((m) => byMonth.get(m)!);
+
+  return { totalSessions, showUpRate, sessionsByMonth, seriesKeys };
 }
 
 /**

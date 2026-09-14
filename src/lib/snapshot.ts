@@ -1,4 +1,4 @@
-import type { AppointmentRow, BookedSessionRow, ParsedDataset, RegisteredPatientRow } from './types';
+import type { AppointmentRow, ParsedDataset, RegisteredPatientRow, SessionRow } from './types';
 import { deserializeDataset, serializeDataset, type SerializedDataset } from './storage';
 
 /**
@@ -25,7 +25,7 @@ export function isSnapshotFile(file: File): boolean {
 export async function parseSnapshotFile(file: File): Promise<{
   rows: AppointmentRow[];
   registeredPatients: RegisteredPatientRow[];
-  bookedSessions: BookedSessionRow[];
+  sessions: SessionRow[];
   skippedCount: number;
 }> {
   const text = await file.text();
@@ -42,7 +42,7 @@ export async function parseSnapshotFile(file: File): Promise<{
   return {
     rows: dataset.rows,
     registeredPatients: dataset.registeredPatients,
-    bookedSessions: dataset.bookedSessions,
+    sessions: dataset.sessions,
     skippedCount: 0,
   };
 }

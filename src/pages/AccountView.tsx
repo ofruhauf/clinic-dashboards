@@ -11,12 +11,13 @@ import {
   computeBookedPipeline,
   computeCumulativeRegisteredPatients,
   computeMetrics,
+  computeSessionMetrics,
   filterByRange,
   monthsForRange,
   resolveDateRange,
   type MonthlySeriesPoint,
 } from '../lib/metrics';
-import type { AppointmentRow, BookedSessionRow, DateRangePreset, RegisteredPatientRow } from '../lib/types';
+import type { AppointmentRow, DateRangePreset, RegisteredPatientRow, SessionRow } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
 import { formatCurrency, formatCurrencyCompact } from '../lib/format';
 import { useStatVisibility } from '../lib/useStatVisibility';
@@ -24,12 +25,12 @@ import { useStatVisibility } from '../lib/useStatVisibility';
 interface AccountViewProps {
   rows: AppointmentRow[];
   registeredPatients: RegisteredPatientRow[];
-  bookedSessions: BookedSessionRow[];
+  sessions: SessionRow[];
   account: string;
   preset: DateRangePreset;
 }
 
-export default function AccountView({ rows, registeredPatients, bookedSessions, account, preset }: AccountViewProps) {
+export default function AccountView({ rows, registeredPatients, sessions, account, preset }: AccountViewProps) {
   const accountRows = useMemo(() => rows.filter((r) => r.account === account), [rows, account]);
   const registeredForAccount = useMemo(
     () => registeredPatients.filter((p) => p.company === account),
@@ -41,6 +42,27 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
   const filtered = useMemo(() => filterByRange(accountRows, range), [accountRows, range]);
   const months = useMemo(() => monthsForRange(accountRows, range), [accountRows, range]);
   const metrics = useMemo(() => computeMetrics(filtered, months, accountRows), [filtered, months, accountRows]);
+
+  // Sessions, visit-type breakdown, and show-up rate come from the scheduling
+  // CRM's sessions export instead of claims — more complete and current
+  // (claims only reflects what's been billed so far, and has no show-up
+  // outcome at all). Given its own date range/month axis (independent of the
+  // claims-derived `months` above) so the current-preset window reflects
+  // this file's own latest data, not claims' potentially-lagging one.
+  const sessionsForAccount = useMemo(() => sessions.filter((s) => s.account === account), [sessions, account]);
+  const sessionRange = useMemo(() => resolveDateRange(preset, sessionsForAccount), [preset, sessionsForAccount]);
+  const filteredSessions = useMemo(
+    () => filterByRange(sessionsForAccount, sessionRange),
+    [sessionsForAccount, sessionRange]
+  );
+  const sessionMonths = useMemo(
+    () => monthsForRange(sessionsForAccount, sessionRange),
+    [sessionsForAccount, sessionRange]
+  );
+  const sessionMetrics = useMemo(
+    () => computeSessionMetrics(filteredSessions, sessionMonths),
+    [filteredSessions, sessionMonths]
+  );
 
   // Registered-patient growth — the primary patient-growth metric (registered,
   // not billed/active). Only patients with a parseable registration date can be
@@ -54,37 +76,34 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
     [datedRegistered, months]
   );
 
-  const bookedForAccount = useMemo(
-    () => bookedSessions.filter((b) => b.account === account),
-    [bookedSessions, account]
-  );
-  const bookedPipeline = useMemo(() => computeBookedPipeline(bookedForAccount), [bookedForAccount]);
+  const bookedPipeline = useMemo(() => computeBookedPipeline(sessionsForAccount), [sessionsForAccount]);
 
-  // Forward-looking monthly breakdown of the same booked pipeline, appended
-  // as a visually-distinct tail to the sessions/revenue/patients charts
+  // Forward-looking monthly breakdown of the same booked pipeline (the
+  // future-dated, non-cancelled rows within the same sessions export),
+  // appended as a visually-distinct tail to the revenue/new-patients charts
   // below — never merged into the actual historical series, since it comes
-  // from a different system (the scheduling CRM) and nothing in it has
-  // happened or been billed yet. accountRows (not the date-range-filtered
-  // `filtered`) is the full existing-patient roster, so "new" means never
-  // treated before, regardless of the current date-range dropdown.
+  // from a different confidence level (nothing here has been billed yet).
+  // accountRows (not the date-range-filtered `filtered`) is the full
+  // existing-patient roster, so "new" means never treated before, regardless
+  // of the current date-range dropdown.
   const bookedByMonth = useMemo(
-    () => computeBookedByMonth(bookedForAccount, accountRows.map((r) => r.patient)),
-    [bookedForAccount, accountRows]
+    () => computeBookedByMonth(sessionsForAccount, accountRows.map((r) => r.patient)),
+    [sessionsForAccount, accountRows]
   );
 
   const sessionsByMonthWithProjection = useMemo(() => {
-    if (bookedByMonth.length === 0) return metrics.sessionsByMonth;
-    const existingMonths = new Set(metrics.sessionsByMonth.map((p) => p.month));
+    if (bookedByMonth.length === 0) return sessionMetrics.sessionsByMonth;
+    const existingMonths = new Set(sessionMetrics.sessionsByMonth.map((p) => p.month));
     const projectedPoints: MonthlySeriesPoint[] = bookedByMonth
       .filter((b) => !existingMonths.has(b.month))
       .map((b) => {
         const point: MonthlySeriesPoint = { month: b.month, label: b.label, total: b.sessionCount };
-        for (const key of metrics.seriesKeys) point[key] = 0;
+        for (const key of sessionMetrics.seriesKeys) point[key] = 0;
         point[BOOKED_SERIES_LABEL] = b.sessionCount;
         return point;
       });
-    return [...metrics.sessionsByMonth, ...projectedPoints];
-  }, [metrics.sessionsByMonth, metrics.seriesKeys, bookedByMonth]);
+    return [...sessionMetrics.sessionsByMonth, ...projectedPoints];
+  }, [sessionMetrics.sessionsByMonth, sessionMetrics.seriesKeys, bookedByMonth]);
 
   const revenueByMonthWithProjection = useMemo(() => {
     if (bookedByMonth.length === 0) return metrics.revenueByMonth;
@@ -124,14 +143,14 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
     cards.push({
       key: 'sessions',
       label: 'Sessions',
-      node: <KpiCard label={`${account} sessions`} value={metrics.totalSessions.toLocaleString()} />,
+      node: <KpiCard label={`${account} sessions`} value={sessionMetrics.totalSessions.toLocaleString()} />,
     });
     cards.push({
       key: 'revenue',
       label: 'Revenue',
       node: <KpiCard label={`${account} revenue`} value={formatCurrency(metrics.revenue)} />,
     });
-    if (bookedForAccount.length > 0) {
+    if (sessionsForAccount.length > 0) {
       cards.push({
         key: 'bookedPipeline',
         label: 'Booked sessions (upcoming)',
@@ -155,12 +174,12 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
       node: (
         <KpiCard
           label="Show-up rate"
-          value={metrics.showUpRate == null ? '—' : `${Math.round(metrics.showUpRate * 100)}%`}
+          value={sessionMetrics.showUpRate == null ? '—' : `${Math.round(sessionMetrics.showUpRate * 100)}%`}
         />
       ),
     });
     return cards;
-  }, [account, metrics, registeredCount, bookedForAccount, bookedPipeline]);
+  }, [account, metrics, sessionMetrics, registeredCount, sessionsForAccount, bookedPipeline]);
 
   if (accountRows.length === 0) {
     return (
@@ -200,7 +219,7 @@ export default function AccountView({ rows, registeredPatients, bookedSessions, 
         >
           <SessionsByMonthChart
             data={sessionsByMonthWithProjection}
-            seriesKeys={metrics.seriesKeys}
+            seriesKeys={sessionMetrics.seriesKeys}
             projectedKey={bookedByMonth.length > 0 ? BOOKED_SERIES_LABEL : undefined}
           />
         </ChartCard>

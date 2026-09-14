@@ -67,16 +67,21 @@ also serve from `/clinic-dashboards/` rather than `/`.
    shows hero stats in this order: registered patients, patients treated
    (billed), sessions, revenue, booked sessions (upcoming), new patients,
    show-up rate. Use the account dropdown to switch to any other payer in
-   your data. (Show-up rate isn't in claims data, so it displays as "—".)
-   The **"Registered {account} patients"** card (once a registered-patients
-   export has been uploaded — see below) shows the total who've registered
-   with that payer, whether or not they've been seen/billed yet, with no
-   further breakdown on the card itself. The **"Booked sessions (upcoming)"**
-   card (once a booked-sessions CRM export has been uploaded) shows upcoming
-   session/patient counts and a projected-revenue estimate — see the
-   dedicated section below. Click **Customize stats** (top right of the stat
-   row) to show or hide any of these cards — nothing here needs a code
-   change; see below.
+   your data. **Sessions, the "sessions by month" visit-type breakdown, and
+   show-up rate all come from the sessions CRM export** (see the dedicated
+   section below), not claims — claims only reflects what's been billed so
+   far and has no show-up outcome at all, so the CRM export is the more
+   complete and current source for these three figures specifically.
+   Revenue and patients-treated stay claims-based (only claims has a real
+   charge amount and a stable patient ID). The **"Registered {account}
+   patients"** card (once a registered-patients export has been uploaded —
+   see below) shows the total who've registered with that payer, whether or
+   not they've been seen/billed yet, with no further breakdown on the card
+   itself. The **"Booked sessions (upcoming)"** card (once a sessions CRM
+   export has been uploaded) shows upcoming session/patient counts and a
+   projected-revenue estimate — see the dedicated section below. Click
+   **Customize stats** (top right of the stat row) to show or hide any of
+   these cards — nothing here needs a code change; see below.
 
    **"{account} sessions by month"** sits side by side with **"Registered
    patient growth"** (cumulative registrations, from the registered-patients
@@ -277,40 +282,58 @@ aren't linked. The "N not yet booked" figures shown in the account view and
 Investor View are the difference between the two *counts*, not a verified
 per-patient match — disclosed as such wherever the number appears.
 
-### Booked-sessions CRM export
+### Sessions CRM export
 
 A third file type you can drop into the same upload panel: an export
-straight from the scheduling CRM listing sessions that are booked but
-haven't happened (and so haven't been billed) yet. It powers the "Booked
-sessions" / "Booked pipeline" stat on the account view and Investor View —
-how many upcoming sessions are on the books, how many distinct patients
-that represents, and a rough projected-revenue estimate.
+straight from the scheduling CRM listing **every session, past and
+scheduled** — not just upcoming ones. It's the dashboard's primary source
+for **session counts, the "sessions by month" visit-type breakdown, and
+show-up rate**, since it's more complete and current than claims (which
+only reflects what's been billed so far, and carries no show-up outcome at
+all). Its future-dated, non-cancelled rows also power the "Booked sessions"
+/ "Booked pipeline" stat on the account view and Investor View — how many
+upcoming sessions are on the books, how many distinct patients that
+represents, and a rough projected-revenue estimate. (This file replaced an
+earlier, narrower export that covered only upcoming sessions — if you have
+old snapshots or cached data from that format, they'll be ignored rather
+than misread, since the storage format version changed along with it.)
 
 Columns read:
 
 | Column | Required |
 |---|---|
 | `user` | yes — patient display name (this export has no stable patient ID) |
-| `Insurance` | no (blank → not counted for any account) |
-| `scheduledFor` | yes — ISO 8601 timestamp of the appointment |
-| `status` | no (used only to exclude cancelled/no-show rows) |
+| `title` | no (blank → grouped as "Unspecified" in the visit-type breakdown) |
+| `insuranceCarrier` | no (blank → not counted for any account) |
+| `scheduledFor` | yes — ISO 8601 timestamp of the session, past or future |
+| `status` | no (used only to exclude cancelled/no-show rows from the booked-pipeline count) |
+| `showUp` | no ("Yes"/"No" → real show-up rate; blank/other → excluded from that calculation) |
 
 Unlike claims and registered-patients uploads, which merge new rows into
-what's already loaded, **uploading a booked-sessions file replaces the
-entire previous booked-sessions set.** This export is a snapshot of
-"everything currently on the books" as of the moment it was pulled from
-the CRM — by the time a fresh export arrives, the old one's rows are
-stale (the session either already happened or got rescheduled/cancelled),
-so there's nothing meaningful to merge them against.
+what's already loaded, **uploading a sessions file replaces the entire
+previous sessions set.** This export is a snapshot of the CRM's complete
+session list as of the moment it was pulled — by the time a fresh export
+arrives, the previous upload's rows are simply superseded, so there's
+nothing meaningful to merge them against.
 
-The "upcoming" count filters to sessions scheduled after right now and
-excludes cancelled/no-show statuses, so a past-dated or cancelled row still
-present in the export doesn't inflate the pipeline total. Projected revenue
-is a flat **$140 per session** estimate (`AVG_BOOKED_SESSION_REVENUE` in
-`src/lib/metrics.ts`) — update that constant if the real average changes.
-This is explicitly an estimate for sessions that haven't happened yet, kept
-separate everywhere from actual billed revenue (which always comes from
-real claim amounts), and disclosed as such in the Investor View footer.
+The "upcoming"/booked-pipeline count filters to sessions scheduled after
+right now and excludes cancelled/no-show statuses, so a past-dated or
+cancelled row still present in the export doesn't inflate the pipeline
+total. Projected revenue for that pipeline is a flat **$140 per session**
+estimate (`AVG_BOOKED_SESSION_REVENUE` in `src/lib/metrics.ts`) — update
+that constant if the real average changes. This is explicitly an estimate
+for sessions that haven't happened yet, kept separate everywhere from
+actual billed revenue (which always comes from real claim amounts), and
+disclosed as such in the Investor View footer.
+
+Because "Sessions"/"sessions by month"/"show-up rate" are computed from
+this file with their own date-range window (independent of the
+claims-derived window revenue/patient stats use), the account view's date
+preset (e.g. "Last 12 months") resolves separately for each — so the
+sessions chart's x-axis can span a different range than the revenue chart's
+if the two files' latest dates differ. This is deliberate: it lets the
+sessions chart reflect this file's own most current data rather than being
+capped by whatever claims happens to have billed so far.
 
 Beyond the hero stat, the booked pipeline also appears directly on the
 sessions/revenue/patients charts as a trailing, visually-distinct
@@ -343,7 +366,7 @@ projection on one chart would confuse rather than clarify) and the
 cumulative patient-growth line charts (there's no reliable way to tell
 whether a booked patient is already counted in a claims- or registered-
 patient-based running total, since neither system shares an ID with the
-booked-sessions export).
+sessions export).
 
 ## Tech
 

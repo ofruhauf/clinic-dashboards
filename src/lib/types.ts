@@ -23,22 +23,30 @@ export interface RegisteredPatientRow {
   registeredAt: Date | null; // createdAt — when they registered; null if missing/unparseable
 }
 
-// Exported directly from the practice's scheduling CRM — appointments that are
-// booked but haven't happened (and so haven't been billed) yet. No stable
-// patient ID is available in this export, unlike claims/registered-patients,
-// so patient display name is the only identifier for unique-patient counts —
-// the same level of PHI the claims export already stores for patient names.
-export interface BookedSessionRow {
+// Exported directly from the practice's scheduling CRM — every session, past
+// and scheduled, with a real show-up outcome and the insurance carrier on
+// file. No stable patient ID is available in this export, unlike claims/
+// registered-patients, so patient display name is the only identifier for
+// unique-patient counts — the same level of PHI the claims export already
+// stores for patient names. This is the dashboard's primary source for
+// session counts, visit-type breakdown, and show-up rate — richer and more
+// current than claims, which only reflects what's been billed so far — and
+// its future-dated, non-cancelled rows also power the "booked (upcoming)"
+// pipeline (this file replaced a narrower future-only export that served
+// only that purpose).
+export interface SessionRow {
   patient: string; // display name
-  account: string | null; // normalized insurance/payer name; null = none on file
-  scheduledFor: Date; // the future appointment's date/time
+  title: string; // visit type (evaluation, therapy, coaching, etc.)
+  account: string | null; // normalized insurance carrier; null = none on file
+  scheduledFor: Date; // the session's date/time, past or future
   status: string; // raw CRM status (e.g. SCHEDULED, CONFIRMED, CANCELLED)
+  showUp: boolean | null; // real outcome for past sessions; null if blank/unparseable or not yet happened
 }
 
 export interface ParsedDataset {
   rows: AppointmentRow[];
   registeredPatients: RegisteredPatientRow[];
-  bookedSessions: BookedSessionRow[];
+  sessions: SessionRow[];
   fileNames: string[]; // every file that has contributed rows, in upload order
   uploadedAt: string; // ISO, most recent upload
   rowCount: number;

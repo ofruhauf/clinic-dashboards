@@ -7,7 +7,7 @@ import AccountView from './pages/AccountView';
 import InvestorView from './pages/InvestorView';
 import { mergeIntoDataset, parseClaimsFile } from './lib/parseClaimsFile';
 import { looksLikeUsersFile, parseUsersFile } from './lib/parseUsersFile';
-import { looksLikeBookedSessionsFile, parseBookedSessionsFile } from './lib/parseBookedSessionsFile';
+import { looksLikeSessionsFile, parseSessionsFile } from './lib/parseSessionsFile';
 import { downloadSnapshot, isSnapshotFile, parseSnapshotFile } from './lib/snapshot';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
 import { listAccounts, resolveDateRange } from './lib/metrics';
@@ -63,8 +63,8 @@ export default function App() {
           parsed = await parseSnapshotFile(file);
         } else if (await looksLikeUsersFile(file)) {
           parsed = await parseUsersFile(file);
-        } else if (await looksLikeBookedSessionsFile(file)) {
-          parsed = await parseBookedSessionsFile(file);
+        } else if (await looksLikeSessionsFile(file)) {
+          parsed = await parseSessionsFile(file);
         } else {
           parsed = await parseClaimsFile(file);
         }
@@ -107,9 +107,9 @@ export default function App() {
           <p style={{ fontSize: 14, color: '#52514e', marginBottom: 20 }}>
             Upload your weekly claims reports to see clinic growth, sessions, and revenue trends. Drop in as many
             files at once as you like — future uploads add to what's already here. A registered-users export works
-            too (adds registered-patient counts by payer), so does a booked-sessions CRM export (adds an upcoming
-            pipeline count with a projected revenue estimate), and so does a snapshot file (.json) shared by a
-            colleague — drop any of them in and they load the same way.
+            too (adds registered-patient counts by payer), so does a sessions CRM export (drives session counts,
+            visit-type breakdown, show-up rate, and the upcoming booked pipeline), and so does a snapshot file
+            (.json) shared by a colleague — drop any of them in and they load the same way.
           </p>
           <UploadPanel onFiles={handleFiles} busy={busy} error={error} />
         </div>
@@ -145,8 +145,8 @@ export default function App() {
             {dataset.registeredDuplicateCount > 0
               ? ` · ${dataset.registeredDuplicateCount.toLocaleString()} registered patient record${dataset.registeredDuplicateCount === 1 ? '' : 's'} updated by a later upload`
               : ''}
-            {dataset.bookedSessions.length > 0
-              ? ` · ${dataset.bookedSessions.length.toLocaleString()} booked session${dataset.bookedSessions.length === 1 ? '' : 's'} on the books`
+            {dataset.sessions.length > 0
+              ? ` · ${dataset.sessions.length.toLocaleString()} session${dataset.sessions.length === 1 ? '' : 's'} loaded from the scheduling CRM`
               : ''}
           </p>
         </div>
@@ -283,7 +283,7 @@ export default function App() {
           <AccountView
             rows={dataset.rows}
             registeredPatients={dataset.registeredPatients}
-            bookedSessions={dataset.bookedSessions}
+            sessions={dataset.sessions}
             account={selectedAccount}
             preset={preset}
           />
@@ -297,7 +297,7 @@ export default function App() {
           <InvestorView
             rows={dataset.rows}
             registeredPatients={dataset.registeredPatients}
-            bookedSessions={dataset.bookedSessions}
+            sessions={dataset.sessions}
             account={selectedAccount}
           />
         ) : (
