@@ -1,9 +1,10 @@
+import type { TooltipContentProps } from 'recharts';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { AXIS_LINE, GRIDLINE, INK_MUTED, INK_PRIMARY, PROJECTED } from '../../lib/theme';
+import { AXIS_LINE, GRIDLINE, INK_MUTED, INK_PRIMARY, lighten } from '../../lib/theme';
 
 interface ProjectedSeries {
-  key: string; // data key for the projected values — 0 (or absent) except on the current, in-progress month
-  label: string; // legend/tooltip name, e.g. "Projected (month-to-date pace)"
+  key: string; // data key for the projected remainder — 0 (or absent) except on the current, in-progress month
+  label: string; // legend name, e.g. "Projected (month-to-date pace)"
 }
 
 interface Props {
@@ -18,6 +19,39 @@ interface Props {
   projected?: ProjectedSeries;
 }
 
+interface ProjectedTooltipProps extends TooltipContentProps {
+  yKey: string;
+  projected?: ProjectedSeries;
+  format: (v: number) => string;
+}
+
+function ProjectedTooltip({ active, payload, label, yKey, projected, format }: ProjectedTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0].payload as Record<string, unknown>;
+  const actual = Number(row[yKey]) || 0;
+  const remainder = projected ? Number(row[projected.key]) || 0 : 0;
+
+  return (
+    <div
+      style={{
+        borderRadius: 8,
+        border: '1px solid rgba(11,11,11,0.10)',
+        background: '#fcfcfb',
+        padding: '8px 10px',
+        fontSize: 12.5,
+      }}
+    >
+      <div style={{ color: INK_PRIMARY, fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      <div>{projected ? `Actual: ${format(actual)}` : format(actual)}</div>
+      {remainder > 0 && (
+        <div style={{ color: INK_MUTED }}>
+          {projected!.label}: {format(actual + remainder)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SimpleBarChart({
   data,
   xKey,
@@ -29,6 +63,8 @@ export default function SimpleBarChart({
   actualLabel = 'Actual',
   projected,
 }: Props) {
+  const format = (v: number) => (valueFormatter ? valueFormatter(v) : `${v}${valueSuffix}`);
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
@@ -50,12 +86,9 @@ export default function SimpleBarChart({
         />
         <Tooltip
           cursor={{ fill: 'rgba(11,11,11,0.04)' }}
-          contentStyle={{ borderRadius: 8, border: '1px solid rgba(11,11,11,0.10)', fontSize: 12.5 }}
-          labelStyle={{ color: INK_PRIMARY, fontWeight: 600 }}
-          formatter={(value, name) => [
-            valueFormatter ? valueFormatter(Number(value)) : `${value}${valueSuffix}`,
-            projected ? name : undefined,
-          ]}
+          content={(props: TooltipContentProps) => (
+            <ProjectedTooltip {...props} yKey={yKey} projected={projected} format={format} />
+          )}
         />
         {projected && <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: INK_MUTED, paddingTop: 8 }} />}
         <Bar
@@ -71,11 +104,7 @@ export default function SimpleBarChart({
             dataKey={projected.key}
             name={projected.label}
             stackId="combined"
-            fill={PROJECTED}
-            fillOpacity={0.35}
-            stroke={PROJECTED}
-            strokeDasharray="4 3"
-            strokeWidth={1.5}
+            fill={lighten(color, 0.55)}
             radius={[4, 4, 0, 0]}
             maxBarSize={40}
           />

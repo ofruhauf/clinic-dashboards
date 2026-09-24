@@ -22,11 +22,18 @@ export const GRIDLINE = '#e1e0d9';
 export const AXIS_LINE = '#c3c2b7';
 export const GOOD = '#006300';
 export const CRITICAL = '#d03b3b';
-// Used only for the current, in-progress month's projected run-rate segment
-// stacked on top of the actual bar in "Revenue by month" / "New patients per
-// month" — deliberately neutral gray so it never reads as a real data series.
-export const PROJECTED = '#898781';
 
 export function seriesColor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length];
+}
+
+/** Blends a hex color toward white — used for the projected run-rate bar segment, a faded tint of the actual series' own color rather than an unrelated neutral. */
+export function lighten(hex: string, amount: number): string {
+  const clean = hex.replace('#', '');
+  const num = parseInt(clean, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
 }

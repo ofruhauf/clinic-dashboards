@@ -97,7 +97,7 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <ChartCard
           title="Revenue by month"
-          subtitle="Value recognized per the tracking workbook · dashed = projected full-month pace"
+          subtitle="Value recognized per the tracking workbook · faded = projected full-month pace"
         >
           <SimpleBarChart
             data={periodMetrics.revenueByMonth}
@@ -109,7 +109,7 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
             projected={{ key: 'projected', label: 'Projected (month-to-date pace)' }}
           />
         </ChartCard>
-        <ChartCard title="New patients per month" subtitle="Dashed = projected full-month pace">
+        <ChartCard title="New patients per month" subtitle="Faded = projected full-month pace">
           <SimpleBarChart
             data={newPatientsByMonth}
             xKey="label"
