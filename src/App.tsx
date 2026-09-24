@@ -1,80 +1,55 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import UploadPanel from './components/UploadPanel';
 import FilterBar from './components/FilterBar';
-import QueryBox from './components/QueryBox';
-import Overview from './pages/Overview';
-import AccountView from './pages/AccountView';
+import HorizonView from './pages/HorizonView';
 import InvestorView from './pages/InvestorView';
-import { mergeIntoDataset, parseClaimsFile } from './lib/parseClaimsFile';
-import { looksLikeUsersFile, parseUsersFile } from './lib/parseUsersFile';
-import { looksLikeSessionsFile, parseSessionsFile } from './lib/parseSessionsFile';
+import { looksLikeHorizonFile, parseHorizonFile } from './lib/parseHorizonFile';
 import { downloadSnapshot, isSnapshotFile, parseSnapshotFile } from './lib/snapshot';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
-import { listAccounts, resolveDateRange } from './lib/metrics';
-import type { QueryContext } from './lib/query';
-import { DATE_RANGE_PRESETS, type DateRangePreset, type ParsedDataset } from './lib/types';
+import { DATE_RANGE_PRESETS, type DateRangePreset, type HorizonDataset } from './lib/types';
 
-type Tab = 'account' | 'overview' | 'investor';
+type Tab = 'horizon' | 'investor';
 
 export default function App() {
-  const [dataset, setDataset] = useState<ParsedDataset | null>(() => loadDataset());
+  const [dataset, setDataset] = useState<HorizonDataset | null>(() => loadDataset());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('account');
+  const [tab, setTab] = useState<Tab>('horizon');
   const [preset, setPreset] = useState<DateRangePreset>('last12');
-  const [manuallySelectedAccount, setManuallySelectedAccount] = useState<string | null>(null);
-
-  const accounts = useMemo(() => (dataset ? listAccounts(dataset.rows) : []), [dataset]);
-
-  const selectedAccount = useMemo(() => {
-    if (accounts.length === 0) return null;
-    if (manuallySelectedAccount && accounts.some((a) => a.name === manuallySelectedAccount)) {
-      return manuallySelectedAccount;
-    }
-    const horizon = accounts.find((a) => a.name.toLowerCase() === 'horizon');
-    return (horizon ?? accounts[0]).name;
-  }, [accounts, manuallySelectedAccount]);
-
-  const queryContext: QueryContext = useMemo(() => {
-    const rows = dataset?.rows ?? [];
-    const scopeAccount = tab === 'account' ? selectedAccount : null;
-    const scopeRows = scopeAccount ? rows.filter((r) => r.account === scopeAccount) : rows;
-    const presetLabel = (DATE_RANGE_PRESETS.find((p) => p.value === preset)?.label ?? 'current range').toLowerCase();
-    return {
-      allRows: rows,
-      accounts,
-      defaultAccount: scopeAccount,
-      defaultRange: resolveDateRange(preset, scopeRows),
-      defaultRangeLabel: presetLabel,
-    };
-  }, [dataset, tab, selectedAccount, preset, accounts]);
 
   async function handleFiles(files: File[]) {
     if (files.length === 0) return;
     setBusy(true);
     setError(null);
 
-    let next = dataset;
+    let next: HorizonDataset | null = null;
     const failures: string[] = [];
     for (const file of files) {
       try {
-        let parsed;
+        let parsed: { users: HorizonDataset['users']; months: string[]; skippedCount: number };
         if (isSnapshotFile(file)) {
           parsed = await parseSnapshotFile(file);
-        } else if (await looksLikeUsersFile(file)) {
-          parsed = await parseUsersFile(file);
-        } else if (await looksLikeSessionsFile(file)) {
-          parsed = await parseSessionsFile(file);
+        } else if (await looksLikeHorizonFile(file)) {
+          parsed = await parseHorizonFile(file);
         } else {
-          parsed = await parseClaimsFile(file);
+          throw new Error('Not a recognized file — expected the Horizon tracking workbook or a snapshot (.json).');
         }
-        next = mergeIntoDataset(next, file.name, parsed);
+        // Each valid upload REPLACES the whole dataset — this workbook is a
+        // fresh full export every time, not something to merge row-by-row.
+        next = {
+          users: parsed.users,
+          months: parsed.months,
+          fileName: file.name,
+          uploadedAt: new Date().toISOString(),
+          rowCount: parsed.users.length,
+          skippedCount: parsed.skippedCount,
+        };
       } catch (e) {
         failures.push(`${file.name}: ${e instanceof Error ? e.message : 'could not parse'}`);
       }
     }
 
-    if (next && next !== dataset) {
+    if (next) {
       setDataset(next);
       saveDataset(next);
     }
@@ -87,7 +62,6 @@ export default function App() {
   function handleReset() {
     clearDataset();
     setDataset(null);
-    setManuallySelectedAccount(null);
   }
 
   if (!dataset) {
@@ -105,11 +79,9 @@ export default function App() {
         <div style={{ maxWidth: 520, width: '100%' }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agave Health — Growth Dashboard</h1>
           <p style={{ fontSize: 14, color: '#52514e', marginBottom: 20 }}>
-            Upload your weekly claims reports to see clinic growth, sessions, and revenue trends. Drop in as many
-            files at once as you like — future uploads add to what's already here. A registered-users export works
-            too (adds registered-patient counts by payer), so does a sessions CRM export (drives session counts,
-            visit-type breakdown, show-up rate, and the upcoming booked pipeline), and so does a snapshot file
-            (.json) shared by a colleague — drop any of them in and they load the same way.
+            Upload the Horizon tracking workbook (the "Users Tracking" tab is read automatically) to see
+            registration, session, and revenue trends. A snapshot file (.json) shared by a colleague works too —
+            drop it in to load the same dashboard without re-uploading the workbook.
           </p>
           <UploadPanel onFiles={handleFiles} busy={busy} error={error} />
         </div>
@@ -133,21 +105,8 @@ export default function App() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>Agave Health — Growth Dashboard</h1>
           <p style={{ fontSize: 12.5, color: '#898781', marginTop: 2 }}>
-            {dataset.rowCount.toLocaleString()} claims loaded from{' '}
-            {dataset.fileNames.length <= 2 ? dataset.fileNames.join(', ') : `${dataset.fileNames.length} files`}
-            {dataset.skippedCount > 0 ? ` · ${dataset.skippedCount} skipped (missing patient/date)` : ''}
-            {dataset.duplicateCount > 0
-              ? ` · ${dataset.duplicateCount} claim${dataset.duplicateCount === 1 ? '' : 's'} updated by a later upload`
-              : ''}
-            {dataset.registeredPatients.length > 0
-              ? ` · ${dataset.registeredPatients.length.toLocaleString()} registered patients loaded`
-              : ''}
-            {dataset.registeredDuplicateCount > 0
-              ? ` · ${dataset.registeredDuplicateCount.toLocaleString()} registered patient record${dataset.registeredDuplicateCount === 1 ? '' : 's'} updated by a later upload`
-              : ''}
-            {dataset.sessions.length > 0
-              ? ` · ${dataset.sessions.length.toLocaleString()} session${dataset.sessions.length === 1 ? '' : 's'} loaded from the scheduling CRM`
-              : ''}
+            {dataset.rowCount.toLocaleString()} users loaded from {dataset.fileName}
+            {dataset.skippedCount > 0 ? ` · ${dataset.skippedCount} row${dataset.skippedCount === 1 ? '' : 's'} skipped` : ''}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -231,10 +190,6 @@ export default function App() {
         <p style={{ fontSize: 13, color: '#d03b3b', marginBottom: 16, fontWeight: 600 }}>{error}</p>
       )}
 
-      <div className="no-print" style={{ marginBottom: 18 }}>
-        <QueryBox context={queryContext} />
-      </div>
-
       <div
         className="no-print"
         style={{
@@ -247,7 +202,7 @@ export default function App() {
         }}
       >
         <nav style={{ display: 'flex', gap: 4, background: '#f0efec', borderRadius: 10, padding: 3 }}>
-          {(['account', 'investor', 'overview'] as Tab[]).map((t) => (
+          {(['horizon', 'investor'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -263,48 +218,23 @@ export default function App() {
                 boxShadow: tab === t ? '0 1px 2px rgba(11,11,11,0.10)' : 'none',
               }}
             >
-              {t === 'overview' ? 'Clinic overview' : t === 'investor' ? 'Investor View' : (selectedAccount ?? 'Account')}
+              {t === 'investor' ? 'Investor View' : 'Horizon'}
             </button>
           ))}
         </nav>
 
-        <FilterBar
-          preset={preset}
-          onPresetChange={setPreset}
-          accounts={tab === 'account' ? accounts : undefined}
-          selectedAccount={tab === 'account' ? (selectedAccount ?? undefined) : undefined}
-          onAccountChange={tab === 'account' ? setManuallySelectedAccount : undefined}
-        />
+        {tab === 'horizon' && (
+          <FilterBar
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+        )}
       </div>
 
-      {tab === 'overview' && <Overview rows={dataset.rows} preset={preset} />}
-      {tab === 'account' &&
-        (selectedAccount ? (
-          <AccountView
-            rows={dataset.rows}
-            registeredPatients={dataset.registeredPatients}
-            sessions={dataset.sessions}
-            account={selectedAccount}
-            preset={preset}
-          />
-        ) : (
-          <p style={{ color: '#898781', fontSize: 14 }}>
-            No accounts (insurance payers) found in this dataset yet.
-          </p>
-        ))}
-      {tab === 'investor' &&
-        (selectedAccount ? (
-          <InvestorView
-            rows={dataset.rows}
-            registeredPatients={dataset.registeredPatients}
-            sessions={dataset.sessions}
-            account={selectedAccount}
-          />
-        ) : (
-          <p style={{ color: '#898781', fontSize: 14 }}>
-            No accounts (insurance payers) found in this dataset yet.
-          </p>
-        ))}
+      {tab === 'horizon' && <HorizonView dataset={dataset} preset={preset} />}
+      {tab === 'investor' && <InvestorView dataset={dataset} />}
+
+      {!DATE_RANGE_PRESETS.length && null /* keep import used if list ever becomes conditional */}
     </div>
   );
 }

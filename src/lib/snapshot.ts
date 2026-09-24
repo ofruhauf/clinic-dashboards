@@ -1,14 +1,13 @@
-import type { AppointmentRow, ParsedDataset, RegisteredPatientRow, SessionRow } from './types';
+import type { HorizonDataset, HorizonUserRow } from './types';
 import { deserializeDataset, serializeDataset, type SerializedDataset } from './storage';
 
 /**
  * Lets two people share a dataset without a backend: one side downloads a
  * snapshot file of everything currently loaded, sends it (email, Slack,
  * AirDrop — whatever), and the other side drops it into the same upload
- * panel. It merges like any other file, so it can seed an empty dashboard
- * or update one that already has data loaded.
+ * panel to see the identical dashboard without re-uploading the workbook.
  */
-export function downloadSnapshot(dataset: ParsedDataset): void {
+export function downloadSnapshot(dataset: HorizonDataset): void {
   const blob = new Blob([JSON.stringify(serializeDataset(dataset))], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -22,12 +21,7 @@ export function isSnapshotFile(file: File): boolean {
   return file.name.toLowerCase().endsWith('.json');
 }
 
-export async function parseSnapshotFile(file: File): Promise<{
-  rows: AppointmentRow[];
-  registeredPatients: RegisteredPatientRow[];
-  sessions: SessionRow[];
-  skippedCount: number;
-}> {
+export async function parseSnapshotFile(file: File): Promise<{ users: HorizonUserRow[]; months: string[]; skippedCount: number }> {
   const text = await file.text();
   let parsed: SerializedDataset;
   try {
@@ -35,14 +29,9 @@ export async function parseSnapshotFile(file: File): Promise<{
   } catch {
     throw new Error('Not a valid snapshot file (couldn\'t parse JSON).');
   }
-  if (!parsed || !Array.isArray(parsed.rows)) {
+  if (!parsed || !Array.isArray(parsed.users)) {
     throw new Error('Not a valid Agave dashboard snapshot file.');
   }
   const dataset = deserializeDataset(parsed);
-  return {
-    rows: dataset.rows,
-    registeredPatients: dataset.registeredPatients,
-    sessions: dataset.sessions,
-    skippedCount: 0,
-  };
+  return { users: dataset.users, months: dataset.months, skippedCount: 0 };
 }

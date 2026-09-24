@@ -1,9 +1,4 @@
-import type { AppointmentRow, DateRange, SessionRow } from './types';
-
-export const SELF_PAY_LABEL = 'Self-pay';
-const OTHER_LABEL = 'Other';
-const MAX_SERIES = 4;
-const MAX_BAR_CATEGORIES = 8;
+import type { DateRangePreset, HorizonUserRow } from './types';
 
 export function monthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -21,7 +16,7 @@ export function addMonths(key: string, delta: number): string {
   return monthKey(d);
 }
 
-/** Inclusive list of month keys spanning start..end (both derived from data if not given). */
+/** Inclusive list of month keys spanning start..end. */
 export function monthRange(start: string, end: string): string[] {
   const out: string[] = [];
   let cursor = start;
@@ -32,57 +27,6 @@ export function monthRange(start: string, end: string): string[] {
     guard += 1;
   }
   return out;
-}
-
-export function accountLabel(account: string | null): string {
-  return account ?? SELF_PAY_LABEL;
-}
-
-interface Scheduled {
-  scheduledFor: Date;
-}
-
-export function filterByRange<T extends Scheduled>(rows: T[], range: DateRange): T[] {
-  if (!range.start && !range.end) return rows;
-  return rows.filter((row) => {
-    if (range.start && row.scheduledFor < range.start) return false;
-    if (range.end && row.scheduledFor > range.end) return false;
-    return true;
-  });
-}
-
-/** Latest scheduled appointment date across `rows`, or null if empty. */
-export function latestDate<T extends Scheduled>(rows: T[]): Date | null {
-  if (rows.length === 0) return null;
-  return rows.reduce((max, r) => (r.scheduledFor > max ? r.scheduledFor : max), rows[0].scheduledFor);
-}
-
-/** Range covering the last `n` months ending with the month of the latest row (inclusive). */
-export function lastNMonthsRange<T extends Scheduled>(n: number, rows: T[]): DateRange {
-  const latest = latestDate(rows);
-  if (!latest) return { start: null, end: null };
-  const endOfMonth = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() + 1, 0, 23, 59, 59));
-  const start = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() - (n - 1), 1));
-  return { start, end: endOfMonth };
-}
-
-export function resolveDateRange<T extends Scheduled>(preset: string, rows: T[]): DateRange {
-  const latest = latestDate(rows);
-  if (!latest) return { start: null, end: null };
-  const endOfMonth = new Date(Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth() + 1, 0, 23, 59, 59));
-
-  switch (preset) {
-    case 'ytd':
-      return { start: new Date(Date.UTC(latest.getUTCFullYear(), 0, 1)), end: endOfMonth };
-    case 'last3':
-      return lastNMonthsRange(3, rows);
-    case 'last6':
-      return lastNMonthsRange(6, rows);
-    case 'last12':
-      return lastNMonthsRange(12, rows);
-    default:
-      return { start: null, end: null };
-  }
 }
 
 /**
@@ -99,49 +43,33 @@ export function excludeCurrentMonth(months: string[], now: Date = new Date()): s
   return months.filter((m) => m < currentMonth || (m === currentMonth && includeCurrentMonth));
 }
 
-/** Continuous month axis covering `range`, falling back to the full span of `rows` for an open range. */
-export function monthsForRange<T extends Scheduled>(rows: T[], range: DateRange): string[] {
-  if (range.start && range.end) {
-    return monthRange(monthKey(range.start), monthKey(range.end));
-  }
-  if (rows.length === 0) return [];
-  const dates = rows.map((r) => r.scheduledFor);
-  const min = dates.reduce((a, b) => (b < a ? b : a));
-  const max = dates.reduce((a, b) => (b > a ? b : a));
-  return monthRange(monthKey(range.start ?? min), monthKey(range.end ?? max));
-}
-
-export function listAccounts(rows: AppointmentRow[]): { name: string; sessions: number }[] {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    if (!row.account) continue;
-    counts.set(row.account, (counts.get(row.account) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([name, sessions]) => ({ name, sessions }))
-    .sort((a, b) => b.sessions - a.sessions);
-}
-
-/** Earliest scheduled appointment per patient (keyed by patientId), across the given rows. */
-export function firstAppointmentByPatient(rows: AppointmentRow[]): Map<string, Date> {
-  const map = new Map<string, Date>();
-  for (const row of rows) {
-    const existing = map.get(row.patientId);
-    if (!existing || row.scheduledFor < existing) {
-      map.set(row.patientId, row.scheduledFor);
+/**
+ * Narrows the workbook's full month range down to the date-range preset's
+ * window, anchored to the latest month actually present in the data (not
+ * today's real-world date, so the window stays meaningful regardless of
+ * when the workbook was last updated).
+ */
+export function resolveHorizonMonthWindow(preset: DateRangePreset, allMonths: string[]): string[] {
+  if (allMonths.length === 0) return [];
+  const latest = allMonths[allMonths.length - 1];
+  const lastN = (n: number) => {
+    const start = addMonths(latest, -(n - 1));
+    return allMonths.filter((m) => m >= start);
+  };
+  switch (preset) {
+    case 'ytd': {
+      const year = latest.split('-')[0];
+      return allMonths.filter((m) => m.startsWith(`${year}-`));
     }
+    case 'last3':
+      return lastN(3);
+    case 'last6':
+      return lastN(6);
+    case 'last12':
+      return lastN(12);
+    default:
+      return allMonths;
   }
-  return map;
-}
-
-function topCategories(counts: Map<string, number>, max: number): Map<string, number> {
-  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  if (sorted.length <= max) return new Map(sorted);
-  const top = sorted.slice(0, max - 1);
-  const rest = sorted.slice(max - 1).reduce((sum, [, v]) => sum + v, 0);
-  const result = new Map(top);
-  result.set(OTHER_LABEL, rest);
-  return result;
 }
 
 export interface MonthlySeriesPoint {
@@ -151,344 +79,116 @@ export interface MonthlySeriesPoint {
   [series: string]: number | string;
 }
 
-export interface DashboardMetrics {
+// Fixed, known category set — unlike the old free-text visit-type breakdown,
+// there's no need to cap/bucket into "Other" here.
+export const HORIZON_SERIES_KEYS = ['Evaluation', 'Coaching', 'Therapy'];
+
+export interface HorizonPeriodMetrics {
   totalSessions: number;
-  uniquePatients: number;
-  newPatients: number;
-  showUpRate: number | null;
-  months: string[];
-  sessionsByMonth: MonthlySeriesPoint[];
-  seriesKeys: string[];
-  newPatientsByMonth: { month: string; label: string; count: number }[];
-  cumulativePatients: { month: string; label: string; total: number }[];
-  accountMix: { name: string; count: number }[];
-  momGrowthPct: number | null;
   revenue: number;
+  sessionsByMonth: MonthlySeriesPoint[];
   revenueByMonth: { month: string; label: string; revenue: number }[];
 }
 
 /**
- * Core metrics for a set of rows. `scopeRows` (defaults to `rows`) determines
- * which rows count toward "first appointment ever" for new-patient detection —
- * pass the account's full history so a patient isn't miscounted as new every
- * time the visible date range changes.
+ * Sessions and revenue for the given month window. Evaluation isn't tracked
+ * as a monthly count in the workbook — each user who selected "evaluation"
+ * counts as exactly one evaluation session, dated to their registration
+ * month (their intake). Coaching/Therapy session counts and dollar Value
+ * come directly from each user's monthly activity blocks.
  */
-export function computeMetrics(
-  rows: AppointmentRow[],
-  months: string[],
-  scopeRows: AppointmentRow[] = rows
-): DashboardMetrics {
-  const totalSessions = rows.length;
-  const patientSet = new Set(rows.map((r) => r.patientId));
-  const uniquePatients = patientSet.size;
-
-  const shown = rows.filter((r) => r.showUp !== null);
-  const showUpRate = shown.length > 0 ? shown.filter((r) => r.showUp).length / shown.length : null;
-
-  // Title/session-type breakdown per month (stacked series, capped).
-  const titleTotals = new Map<string, number>();
-  for (const row of rows) titleTotals.set(row.title, (titleTotals.get(row.title) ?? 0) + 1);
-  const keptTitles = new Set(topCategories(titleTotals, MAX_SERIES).keys());
-  const seriesKeys = Array.from(keptTitles);
-
+export function computeHorizonPeriodMetrics(users: HorizonUserRow[], windowMonths: string[]): HorizonPeriodMetrics {
+  const windowSet = new Set(windowMonths);
   const byMonth = new Map<string, MonthlySeriesPoint>();
   const revenueByMonthMap = new Map<string, number>();
-  for (const m of months) {
-    const point: MonthlySeriesPoint = { month: m, label: monthLabel(m), total: 0 };
-    for (const key of seriesKeys) point[key] = 0;
-    byMonth.set(m, point);
+  for (const m of windowMonths) {
+    byMonth.set(m, { month: m, label: monthLabel(m), total: 0, Evaluation: 0, Coaching: 0, Therapy: 0 });
     revenueByMonthMap.set(m, 0);
   }
-  for (const row of rows) {
-    const m = monthKey(row.scheduledFor);
-    const point = byMonth.get(m);
-    if (point) {
-      const seriesKey = keptTitles.has(row.title) ? row.title : OTHER_LABEL;
-      point[seriesKey] = ((point[seriesKey] as number) ?? 0) + 1;
-      point.total = (point.total as number) + 1;
+
+  for (const user of users) {
+    if (user.serviceSelected === 'evaluation') {
+      const m = monthKey(user.createdAt);
+      const point = byMonth.get(m);
+      if (point) {
+        point.Evaluation = (point.Evaluation as number) + 1;
+        point.total = (point.total as number) + 1;
+      }
     }
-    if (revenueByMonthMap.has(m)) {
-      revenueByMonthMap.set(m, revenueByMonthMap.get(m)! + row.chargeAmount);
+    for (const activity of user.monthly) {
+      if (!windowSet.has(activity.month)) continue;
+      const point = byMonth.get(activity.month)!;
+      point.Coaching = (point.Coaching as number) + activity.coachingSessions;
+      point.Therapy = (point.Therapy as number) + activity.therapySessions;
+      point.total = (point.total as number) + activity.coachingSessions + activity.therapySessions;
+      revenueByMonthMap.set(activity.month, (revenueByMonthMap.get(activity.month) ?? 0) + activity.value);
     }
   }
-  const sessionsByMonth = months.map((m) => byMonth.get(m)!);
 
-  // New patients: first-ever appointment (within scopeRows) falling in this month.
-  const firstAppt = firstAppointmentByPatient(scopeRows);
-  const newPatientCounts = new Map<string, number>();
-  for (const [, date] of firstAppt) {
-    const m = monthKey(date);
-    newPatientCounts.set(m, (newPatientCounts.get(m) ?? 0) + 1);
-  }
-  const newPatientsByMonth = months.map((m) => ({
-    month: m,
-    label: monthLabel(m),
-    count: newPatientCounts.get(m) ?? 0,
-  }));
-  const newPatients = newPatientsByMonth.reduce((sum, p) => sum + p.count, 0);
+  const sessionsByMonth = windowMonths.map((m) => byMonth.get(m)!);
+  const revenueByMonth = windowMonths.map((m) => ({ month: m, label: monthLabel(m), revenue: revenueByMonthMap.get(m) ?? 0 }));
+  const totalSessions = sessionsByMonth.reduce((sum, p) => sum + (p.total as number), 0);
+  const revenue = revenueByMonth.reduce((sum, p) => sum + p.revenue, 0);
 
-  // Cumulative growth curve, seeded with patients who joined before the visible range.
-  const priorPatients = Array.from(firstAppt.values()).filter(
-    (d) => months.length === 0 || monthKey(d) < months[0]
-  ).length;
-  let running = priorPatients;
-  const cumulativePatients = months.map((m) => {
-    running += newPatientCounts.get(m) ?? 0;
-    return { month: m, label: monthLabel(m), total: running };
-  });
-
-  const accountCounts = new Map<string, number>();
-  for (const row of rows) {
-    const label = accountLabel(row.account);
-    accountCounts.set(label, (accountCounts.get(label) ?? 0) + 1);
-  }
-  const accountMix = Array.from(topCategories(accountCounts, MAX_BAR_CATEGORIES).entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // Exclude the current (and any future) month from the trend — a claims report
-  // for the current month is typically still incomplete (not all of the week's
-  // claims have been submitted/processed yet), so an in-progress month reads as
-  // a misleading drop-off next to a completed one.
-  const completeMonthKeys = new Set(excludeCurrentMonth(months));
-  const completeMonths = sessionsByMonth.filter((m) => completeMonthKeys.has(m.month));
-  const lastTwo = completeMonths.slice(-2);
-  const momGrowthPct =
-    lastTwo.length === 2 && lastTwo[0].total > 0
-      ? ((lastTwo[1].total as number) - (lastTwo[0].total as number)) / (lastTwo[0].total as number)
-      : null;
-
-  const revenue = rows.reduce((sum, r) => sum + r.chargeAmount, 0);
-  const revenueByMonth = months.map((m) => ({
-    month: m,
-    label: monthLabel(m),
-    revenue: revenueByMonthMap.get(m) ?? 0,
-  }));
-
-  return {
-    totalSessions,
-    uniquePatients,
-    newPatients,
-    showUpRate,
-    months,
-    sessionsByMonth,
-    seriesKeys,
-    newPatientsByMonth,
-    cumulativePatients,
-    accountMix,
-    momGrowthPct,
-    revenue,
-    revenueByMonth,
-  };
+  return { totalSessions, revenue, sessionsByMonth, revenueByMonth };
 }
 
-export interface SessionMetrics {
-  totalSessions: number;
-  showUpRate: number | null;
-  sessionsByMonth: MonthlySeriesPoint[];
-  seriesKeys: string[];
+/** Total registered users, all-time (not window-filtered — a running total, not a per-period figure). */
+export function countRegistered(users: HorizonUserRow[]): number {
+  return users.length;
+}
+
+/** A user is "engaged in care" once they have any coaching or therapy session in any tracked month. */
+export function isEngaged(user: HorizonUserRow): boolean {
+  return user.monthly.some((m) => m.coachingSessions > 0 || m.therapySessions > 0);
+}
+
+export function countEngaged(users: HorizonUserRow[]): number {
+  return users.filter(isEngaged).length;
+}
+
+/** The first month a user has any coaching/therapy session, or null if never engaged. Assumes `monthly` is chronological. */
+function firstEngagedMonth(user: HorizonUserRow): string | null {
+  for (const m of user.monthly) {
+    if (m.coachingSessions > 0 || m.therapySessions > 0) return m.month;
+  }
+  return null;
 }
 
 /**
- * Session count, visit-type breakdown, and show-up rate computed from the
- * scheduling CRM's sessions export — every session, past and scheduled, not
- * just what's been billed. This is the dashboard's primary source for these
- * three figures: more complete and current than claims (which only reflects
- * what's been submitted for billing so far, and has no show-up outcome at
- * all). Revenue, patient identity/counting, and patient-growth curves stay
- * claims-based (only claims has a real charge amount and a stable patient
- * ID) — this function deliberately doesn't touch those.
+ * Cumulative growth curve over `windowMonths`, seeded with anyone whose
+ * first occurrence of `monthOf(item)` falls before the window — so the
+ * curve reads correctly even when the window is narrowed (e.g. "Last 3
+ * months") rather than always starting from zero.
  */
-export function computeSessionMetrics(rows: SessionRow[], months: string[]): SessionMetrics {
-  const totalSessions = rows.length;
-
-  const shown = rows.filter((r) => r.showUp !== null);
-  const showUpRate = shown.length > 0 ? shown.filter((r) => r.showUp).length / shown.length : null;
-
-  const titleTotals = new Map<string, number>();
-  for (const row of rows) titleTotals.set(row.title, (titleTotals.get(row.title) ?? 0) + 1);
-  const keptTitles = new Set(topCategories(titleTotals, MAX_SERIES).keys());
-  const seriesKeys = Array.from(keptTitles);
-
-  const byMonth = new Map<string, MonthlySeriesPoint>();
-  for (const m of months) {
-    const point: MonthlySeriesPoint = { month: m, label: monthLabel(m), total: 0 };
-    for (const key of seriesKeys) point[key] = 0;
-    byMonth.set(m, point);
-  }
-  for (const row of rows) {
-    const m = monthKey(row.scheduledFor);
-    const point = byMonth.get(m);
-    if (point) {
-      const seriesKey = keptTitles.has(row.title) ? row.title : OTHER_LABEL;
-      point[seriesKey] = ((point[seriesKey] as number) ?? 0) + 1;
-      point.total = (point.total as number) + 1;
-    }
-  }
-  const sessionsByMonth = months.map((m) => byMonth.get(m)!);
-
-  return { totalSessions, showUpRate, sessionsByMonth, seriesKeys };
-}
-
-/**
- * Cumulative registered-patient growth curve over the given months, seeded
- * with anyone who registered before the visible range — same shape and
- * "prior patients" seeding convention as computeMetrics' cumulativePatients,
- * so the two curves plot on directly comparable axes. Patients with no
- * parseable registration date aren't in `patients` filtered — this function
- * expects already-filtered rows with a non-null registeredAt.
- */
-export function computeCumulativeRegisteredPatients(
-  patients: { registeredAt: Date }[],
-  months: string[]
-): { month: string; label: string; total: number }[] {
+function computeCumulativeGrowth(monthsOccurred: string[], windowMonths: string[]): { month: string; label: string; total: number }[] {
   const countsByMonth = new Map<string, number>();
-  for (const p of patients) {
-    const m = monthKey(p.registeredAt);
-    countsByMonth.set(m, (countsByMonth.get(m) ?? 0) + 1);
-  }
-  const priorCount = patients.filter((p) => months.length === 0 || monthKey(p.registeredAt) < months[0]).length;
+  for (const m of monthsOccurred) countsByMonth.set(m, (countsByMonth.get(m) ?? 0) + 1);
+  const priorCount = monthsOccurred.filter((m) => windowMonths.length === 0 || m < windowMonths[0]).length;
   let running = priorCount;
-  return months.map((m) => {
+  return windowMonths.map((m) => {
     running += countsByMonth.get(m) ?? 0;
     return { month: m, label: monthLabel(m), total: running };
   });
 }
 
-// Flat per-session estimate used only for the booked (not-yet-billed) pipeline
-// projection — real billed revenue always comes from actual claim amounts,
-// never this. Update here if the real average session rate changes.
-export const AVG_BOOKED_SESSION_REVENUE = 140;
-
-// A booked session whose status indicates it isn't actually going to happen —
-// filtered out of the pipeline count so a cancelled/no-show row still present
-// in the export doesn't inflate the "upcoming" total.
-const INACTIVE_BOOKED_STATUSES = new Set(['cancelled', 'canceled', 'noshow', 'declined', 'rejected']);
-
-function isActiveBookedStatus(status: string): boolean {
-  return !INACTIVE_BOOKED_STATUSES.has(status.trim().toLowerCase().replace(/[\s_-]+/g, ''));
+export function computeRegisteredGrowth(users: HorizonUserRow[], windowMonths: string[]): { month: string; label: string; total: number }[] {
+  return computeCumulativeGrowth(users.map((u) => monthKey(u.createdAt)), windowMonths);
 }
 
-export interface BookedPipelineSummary {
-  upcomingCount: number;
-  uniquePatients: number;
-  projectedRevenue: number;
+export function computeEngagedGrowth(users: HorizonUserRow[], windowMonths: string[]): { month: string; label: string; total: number }[] {
+  const firstMonths = users.map(firstEngagedMonth).filter((m): m is string => m != null);
+  return computeCumulativeGrowth(firstMonths, windowMonths);
 }
 
-type BookedSessionLike = { patient: string; scheduledFor: Date; status: string };
-
-function normalizePatientKey(patient: string): string {
-  return patient.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-/** Sessions still ahead of `now` and not cancelled/no-show — shared by the summary and monthly-breakdown functions below. */
-function upcomingBookedSessions(bookedSessions: BookedSessionLike[], now: Date): BookedSessionLike[] {
-  return bookedSessions.filter((b) => b.scheduledFor > now && isActiveBookedStatus(b.status));
-}
-
-/**
- * Summarizes booked-but-not-yet-billed sessions for one account: how many
- * are still ahead of `now` and not cancelled, how many distinct patients
- * that represents, and a rough revenue projection at a flat rate per
- * session (real billed revenue is always the actual claim amount — this is
- * an estimate for sessions that haven't been billed yet because they
- * haven't happened yet). No stable patient ID exists in this export, so
- * unique patients are counted by normalized display name.
- */
-export function computeBookedPipeline(bookedSessions: BookedSessionLike[], now: Date = new Date()): BookedPipelineSummary {
-  const upcoming = upcomingBookedSessions(bookedSessions, now);
-  const uniquePatients = new Set(upcoming.map((b) => normalizePatientKey(b.patient))).size;
-  return {
-    upcomingCount: upcoming.length,
-    uniquePatients,
-    projectedRevenue: upcoming.length * AVG_BOOKED_SESSION_REVENUE,
-  };
-}
-
-// Shared key/label for the projected/booked series added to chart data —
-// used as the object key itself (like visit-type series already do), and
-// doubles as the legend/tooltip label so no separate label map is needed.
-export const BOOKED_SERIES_LABEL = 'Booked (upcoming)';
-
-export interface BookedMonthlyBucket {
-  month: string;
-  label: string;
-  sessionCount: number;
-  uniquePatients: number;
-  newUniquePatients: number;
-  projectedRevenue: number;
-}
-
-/**
- * The forward-looking counterpart to sessionsByMonth/revenueByMonth/
- * newPatientsByMonth: upcoming booked sessions bucketed by month, sorted
- * ascending. Used to append a visually-distinct "projected" tail to those
- * charts — never folded into the actual/historical monthly series, since
- * it comes from a different system (the scheduling CRM) at a different
- * confidence level (nothing here has happened or been billed yet).
- *
- * `existingPatientNames` is the account's full claims-history patient
- * roster (display names, not date-filtered) — used to tell a genuinely new
- * patient's upcoming booking apart from an existing/returning patient's.
- * There's no shared ID between the booked-sessions export and claims data,
- * so this match is by normalized display name and is therefore
- * approximate (a name typo or a shared common name could mismatch).
- * `newUniquePatients` counts a given patient only in the first future
- * month they appear, even if they have bookings in multiple months.
- */
-export function computeBookedByMonth(
-  bookedSessions: BookedSessionLike[],
-  existingPatientNames: string[] = [],
-  now: Date = new Date()
-): BookedMonthlyBucket[] {
-  const upcoming = [...upcomingBookedSessions(bookedSessions, now)].sort(
-    (a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime()
-  );
-  const seenBefore = new Set(existingPatientNames.map(normalizePatientKey));
-  const byMonth = new Map<string, { count: number; patients: Set<string>; newPatients: Set<string> }>();
-  for (const b of upcoming) {
-    const m = monthKey(b.scheduledFor);
-    const bucket = byMonth.get(m) ?? { count: 0, patients: new Set<string>(), newPatients: new Set<string>() };
-    bucket.count += 1;
-    const key = normalizePatientKey(b.patient);
-    bucket.patients.add(key);
-    if (!seenBefore.has(key)) {
-      bucket.newPatients.add(key);
-      seenBefore.add(key);
-    }
-    byMonth.set(m, bucket);
+export function computeNewPatientsByMonth(
+  users: HorizonUserRow[],
+  windowMonths: string[]
+): { month: string; label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const u of users) {
+    const m = monthKey(u.createdAt);
+    counts.set(m, (counts.get(m) ?? 0) + 1);
   }
-  return Array.from(byMonth.entries())
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([m, bucket]) => ({
-      month: m,
-      label: monthLabel(m),
-      sessionCount: bucket.count,
-      uniquePatients: bucket.patients.size,
-      newUniquePatients: bucket.newPatients.size,
-      projectedRevenue: bucket.count * AVG_BOOKED_SESSION_REVENUE,
-    }));
-}
-
-/** Share of total sessions each month that belong to `accountRows`, computed against `allRows`. */
-export function computeShareOfTotal(
-  accountRows: AppointmentRow[],
-  allRows: AppointmentRow[],
-  months: string[]
-): { month: string; label: string; sharePct: number }[] {
-  const accountByMonth = new Map<string, number>();
-  for (const row of accountRows) {
-    const m = monthKey(row.scheduledFor);
-    accountByMonth.set(m, (accountByMonth.get(m) ?? 0) + 1);
-  }
-  const totalByMonth = new Map<string, number>();
-  for (const row of allRows) {
-    const m = monthKey(row.scheduledFor);
-    totalByMonth.set(m, (totalByMonth.get(m) ?? 0) + 1);
-  }
-  return months.map((m) => {
-    const total = totalByMonth.get(m) ?? 0;
-    const account = accountByMonth.get(m) ?? 0;
-    return { month: m, label: monthLabel(m), sharePct: total > 0 ? (account / total) * 100 : 0 };
-  });
+  return windowMonths.map((m) => ({ month: m, label: monthLabel(m), count: counts.get(m) ?? 0 }));
 }

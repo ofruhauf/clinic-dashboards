@@ -1,73 +1,38 @@
-import type { AppointmentRow, ParsedDataset, RegisteredPatientRow, SessionRow } from './types';
+import type { HorizonDataset, HorizonMonthActivity, HorizonUserRow } from './types';
 
-// v3: the booked-sessions (future-only) export was replaced by a sessions
-// export covering every session past and scheduled, with a different shape
-// (adds title/showUp) and a different meaning (no longer "just upcoming") —
-// bumped so any old-format data cached in a browser is cleanly ignored
-// rather than loaded and misread.
-const STORAGE_KEY = 'agave-dashboard:dataset:v3';
+// v4: full rebuild around the "Users Tracking" workbook as the single source
+// of truth, replacing the claims/registered-users/sessions-CRM pipeline
+// entirely — a completely different shape, so bumped to cleanly ignore any
+// old-format data cached in a browser rather than misread it.
+const STORAGE_KEY = 'agave-dashboard:dataset:v4';
 
-interface SerializedRow extends Omit<AppointmentRow, 'scheduledFor'> {
-  scheduledFor: string;
+interface SerializedUserRow extends Omit<HorizonUserRow, 'createdAt'> {
+  createdAt: string;
 }
 
-interface SerializedRegisteredPatientRow extends Omit<RegisteredPatientRow, 'registeredAt'> {
-  registeredAt: string | null;
+export interface SerializedDataset extends Omit<HorizonDataset, 'users'> {
+  users: SerializedUserRow[];
 }
 
-interface SerializedSessionRow extends Omit<SessionRow, 'scheduledFor'> {
-  scheduledFor: string;
-}
-
-export interface SerializedDataset
-  extends Omit<ParsedDataset, 'rows' | 'registeredPatients' | 'sessions'> {
-  rows: SerializedRow[];
-  registeredPatients: SerializedRegisteredPatientRow[];
-  sessions: SerializedSessionRow[];
-}
-
-// Shared by localStorage persistence and the export/import snapshot feature —
-// both need the same Date <-> ISO-string round trip.
-export function serializeDataset(dataset: ParsedDataset): SerializedDataset {
+export function serializeDataset(dataset: HorizonDataset): SerializedDataset {
   return {
     ...dataset,
-    rows: dataset.rows.map((row) => ({
-      ...row,
-      scheduledFor: row.scheduledFor.toISOString(),
-    })),
-    registeredPatients: dataset.registeredPatients.map((p) => ({
-      ...p,
-      registeredAt: p.registeredAt ? p.registeredAt.toISOString() : null,
-    })),
-    sessions: dataset.sessions.map((s) => ({
-      ...s,
-      scheduledFor: s.scheduledFor.toISOString(),
-    })),
+    users: dataset.users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() })),
   };
 }
 
-export function deserializeDataset(serialized: SerializedDataset): ParsedDataset {
+export function deserializeDataset(serialized: SerializedDataset): HorizonDataset {
   return {
     ...serialized,
-    rows: serialized.rows.map((row) => ({
-      ...row,
-      scheduledFor: new Date(row.scheduledFor),
+    users: serialized.users.map((u) => ({
+      ...u,
+      createdAt: new Date(u.createdAt),
+      monthly: u.monthly as HorizonMonthActivity[],
     })),
-    // Older cached data / snapshot files predate these fields — default so the
-    // rest of the app can always assume they're present, not undefined.
-    registeredPatients: (serialized.registeredPatients ?? []).map((p) => ({
-      ...p,
-      registeredAt: p.registeredAt ? new Date(p.registeredAt) : null,
-    })),
-    sessions: (serialized.sessions ?? []).map((s) => ({
-      ...s,
-      scheduledFor: new Date(s.scheduledFor),
-    })),
-    registeredDuplicateCount: serialized.registeredDuplicateCount ?? 0,
   };
 }
 
-export function saveDataset(dataset: ParsedDataset): void {
+export function saveDataset(dataset: HorizonDataset): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeDataset(dataset)));
   } catch {
@@ -75,7 +40,7 @@ export function saveDataset(dataset: ParsedDataset): void {
   }
 }
 
-export function loadDataset(): ParsedDataset | null {
+export function loadDataset(): HorizonDataset | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;

@@ -1,12 +1,16 @@
 # Agave Health — Growth Dashboard
 
-A browser-based dashboard for Agave Health's growth, sessions, and revenue
-metrics, with a dedicated view for the Horizon account. No backend or
-database — you upload weekly claims reports (Excel or CSV) and the dashboard
-updates entirely in your browser. The uploaded data stays on your machine
-(saved to `localStorage`) so it's still there next time you open the page.
-Revenue shown throughout the app is the actual billed amount per claim, not
-an estimate.
+A browser-based dashboard for Agave Health's Horizon growth, sessions, and
+revenue metrics. No backend or database — you upload the Horizon D2C
+tracking workbook and the dashboard updates entirely in your browser. The
+uploaded data stays on your machine (saved to `localStorage`) so it's still
+there next time you open the page.
+
+This dashboard has one source of truth: the practice's own Horizon tracking
+workbook (specifically its **"Users Tracking"** tab). It replaced an earlier
+version of this app built around claims exports, a registered-users export,
+and a sessions CRM export from separate systems — that whole pipeline has
+been retired in favor of this single, more complete workbook.
 
 ## Running it
 
@@ -40,146 +44,69 @@ also serve from `/clinic-dashboards/` rather than `/`.
 
 ## Using the dashboard
 
-1. Open the app and drop in your weekly claims report(s) (`.xlsx` or `.csv`).
-   You can select or drop **multiple files at once**, and you can keep
-   uploading new files over time (e.g. each week's report) — every upload
-   *adds* to the existing dataset rather than replacing it. Claims are
-   matched by **`external_encounter_id` + `date_of_service` together**, so
-   re-uploading a report that overlaps a previous one won't double-count
-   those rows. Encounter ID alone isn't used, because real exports have
-   shown the same `external_encounter_id` reused across genuinely different
-   claims for the same patient on different dates — matching by ID alone
-   silently collapsed those into a single claim and dropped real revenue.
-   A different service date is always treated as a different claim, even if
-   the encounter ID matches. If a claim (matched by both fields) shows up
-   again with different data (e.g. a visit type or procedure code corrected
-   in a later week's export), the newly uploaded version normally replaces
-   the older one — with one exception: a claim already recorded as coaching
-   (`procedure_code` `H0038`) never gets overwritten by a non-coaching
-   version of itself, *no matter which file that came from or when it was
-   uploaded*. Real exports show claims getting corrected to H0038 in a
-   later report, never the other way around, so this protects a corrected
-   claim from reverting if you happen to (re-)upload an older report
-   afterward. These matches
-   are counted as "claims updated by a later upload" in the header, whether
-   or not the row's data actually changed.
-2. The **account view** (defaults to Horizon when present, the primary tab)
-   shows hero stats in this order: registered patients, patients treated
-   (billed), sessions, revenue, booked sessions (upcoming), new patients,
-   show-up rate. Use the account dropdown to switch to any other payer in
-   your data. **Sessions, the "sessions by month" visit-type breakdown, and
-   show-up rate all come from the sessions CRM export** (see the dedicated
-   section below), not claims — claims only reflects what's been billed so
-   far and has no show-up outcome at all, so the CRM export is the more
-   complete and current source for these three figures specifically.
-   Revenue and patients-treated stay claims-based (only claims has a real
-   charge amount and a stable patient ID). The **"Registered {account}
-   patients"** card (once a registered-patients export has been uploaded —
-   see below) shows the total who've registered with that payer, whether or
-   not they've been seen/billed yet, with no further breakdown on the card
-   itself. The **"Booked sessions (upcoming)"** card (once a sessions CRM
-   export has been uploaded) shows upcoming session/patient counts and a
-   projected-revenue estimate — see the dedicated section below. Click
-   **Customize stats** (top right of the stat row) to show or hide any of
-   these cards — nothing here needs a code change; see below.
+1. Open the app and drop in the Horizon tracking workbook (`.xlsx`). Only
+   its **"Users Tracking"** tab is read — the workbook's other tabs (Weekly
+   Summary, High Level Daily, OB Flow, Queries, TEMP, etc.) are ignored.
+   Each upload **replaces** whatever was loaded before — this workbook is a
+   fresh full export every time you pull it, not something to merge
+   row-by-row with a previous upload.
+2. The **Horizon** tab (the primary/default tab) shows hero stats in this
+   order: registered patients, patients treated, sessions, revenue, new
+   patients. Click **Customize stats** (top right of the stat row) to show
+   or hide any of these cards.
 
-   **"{account} sessions by month"** sits side by side with **"Registered
-   patient growth"** (cumulative registrations, from the registered-patients
-   export's `createdAt`) — the registered chart only appears once at least
-   one registered patient for that account has a parseable registration
-   date, otherwise the sessions chart takes the full row. Further down,
-   **"Active (billed) patient growth"** (cumulative patients with a billed
-   claim) sits alongside "Revenue by month" and "New patients per month".
-   **Registered patients is the primary patient-growth metric** — it's the
-   one to reach for by default when the question is "how fast are we
-   growing," since it captures everyone who's signed up, not just who's
-   been billed so far; the active/billed chart stays as a secondary,
-   clinically-useful view of who's actually been seen.
-3. **Investor View** is a share-ready, single-account pitch page: a headline
-   ("From 3 sessions in Jun 2026 to 33 in Aug 2026"), hero stats (ARR
-   run-rate, revenue growth MoM, revenue to date, patient LTV to date, and —
-   once a registered-patients export is loaded — registered patients as a
-   pipeline signal), the cumulative-revenue chart side by side with the
-   registered-patient-growth chart (once a registered-patients export is
-   loaded — it falls back to a single full-width revenue chart otherwise), a
-   year-end ARR projection callout, supporting monthly-revenue /
-   share-of-clinic-volume charts, and a pipeline/expansion
-   section. Unlike the other tabs it always shows the account's *entire*
-   history (not the date-range filter) — a pitch is the whole story, not a
-   filtered slice. A **Download as PDF** button (header, visible on this tab)
-   calls the browser's print dialog with a stylesheet that hides all app
-   chrome, so "Save as PDF" produces a clean page ready to attach to an email
-   or drop into a deck. Its growth stats compare complete months only — the
-   current calendar month counts once at least 70% of it has elapsed,
-   otherwise it's excluded so an early-month partial total can't understate
-   (or overstate) the story.
-
-   Both of those two charts are prepended with one extra zero-value point for
-   the month before the account's configured launch date (see
-   `ACCOUNT_LAUNCH_DATES` in `InvestorView.tsx`) — e.g. Horizon launched
-   2026-06-01, so both charts show a "May 2026" $0/0 starting point even
-   though real activity didn't begin until later. This is purely cosmetic,
-   so the curve visibly starts from zero instead of jumping in mid-climb —
-   it isn't a claim that anything happened that month, and it doesn't affect
-   any other chart, stat, or the date-range filter elsewhere on the page.
+   **"Horizon sessions by month"** (stacked Evaluation / Coaching / Therapy)
+   sits side by side with **"Registered patient growth"** (cumulative
+   registrations, from each user's Creation Date). Further down, **"Revenue
+   by month"**, **"New patients per month"**, and **"Engaged (in-care)
+   patient growth"** (cumulative patients who've had a coaching or therapy
+   session) round out the page.
+3. **Investor View** is a share-ready pitch page: a headline ("From 6
+   sessions in Jul 2026 to 85 in Sep 2026"), hero stats (ARR run-rate,
+   revenue growth MoM, revenue to date, patient LTV to date, registered
+   patients), the cumulative-revenue chart side by side with the
+   registered-patient-growth chart, a year-end ARR projection callout,
+   supporting monthly-revenue and engaged-patient-growth charts, and a
+   pipeline/expansion section. Unlike the Horizon tab it always shows the
+   *entire* history (not the date-range filter) — a pitch is the whole
+   story, not a filtered slice. A **Download as PDF** button (header,
+   visible on this tab) calls the browser's print dialog with a stylesheet
+   that hides all app chrome, so "Save as PDF" produces a clean page ready
+   to attach to an email or drop into a deck. Its growth stats compare
+   complete months only — the current calendar month counts once at least
+   70% of it has elapsed, otherwise it's excluded so an early-month partial
+   total can't understate (or overstate) the story.
 
    **Customize stats**, next to Download as PDF, opens a checklist of every
-   hero stat the page currently knows how to compute — check one to show it,
-   uncheck to hide it (the "Customize stats" control itself, and whatever
-   you hide, never appear in the printed/PDF version). Everything is shown
-   by default; unchecking is how you hide one that doesn't fit the story
-   (e.g. Show-up rate). Registered patients only shows up as an option once
-   you've uploaded a registered-patients export — there's nothing to turn on
-   before then, since there'd be nothing to show. Choices are saved per
-   browser (`localStorage`) and shared across accounts, not per-account —
-   they're remembered the next time you open the page. There's no way to add
-   a *new kind* of stat this way — only show/hide the ones already built
-   into the app (see `src/pages/AccountView.tsx` and
-   `src/pages/InvestorView.tsx` for the full catalog, or ask for a new one to
-   be added to it).
+   hero stat the page currently knows how to compute — check one to show
+   it, uncheck to hide it (the "Customize stats" control itself, and
+   whatever you hide, never appear in the printed/PDF version). Choices are
+   saved per browser (`localStorage`) and remembered the next time you open
+   the page. There's no way to add a *new kind* of stat this way — only
+   show/hide the ones already built into the app (see
+   `src/pages/HorizonView.tsx` and `src/pages/InvestorView.tsx` for the full
+   catalog, or ask for a new one to be added to it).
 
-   A handful of small config maps at the top of `src/pages/InvestorView.tsx`
-   (keyed by account name, lowercase) drive facts the spreadsheet can't
-   express on its own — edit these directly as the real story changes:
-   - `ACCOUNT_LAUNCH_DATES` — story-start date, when it's later than the
-     first row in the data (e.g. a pre-launch pilot session).
-   - `ACCOUNT_EOY_ARR_TARGET` — a stated year-end ARR goal; the page computes
-     and discloses the sustained month-over-month growth rate that goal
-     implies from the latest known month, rather than presenting the target
-     as if it were independently forecast.
-   - `ACCOUNT_ORGANIC_NOTE` — a short freeform note (e.g. "100% organic, zero
+   A few constants at the top of `src/pages/InvestorView.tsx` drive facts
+   the spreadsheet can't express on its own — edit these directly as the
+   real story changes:
+   - `EOY_ARR_TARGET` — a stated year-end ARR goal; the page computes and
+     discloses the sustained month-over-month growth rate that goal implies
+     from the latest known month, rather than presenting the target as if
+     it were independently forecast.
+   - `ORGANIC_NOTE` — a short freeform note (e.g. "100% organic, zero
      marketing spend") shown under the headline.
-   - `PIPELINE_TARGETS` / `PIPELINE_COVERED_LIVES` — the expansion pipeline
-     badges shown in the "playbook" section.
 
    **Patient LTV** is deliberately *not* a projected lifetime figure — it's
-   total revenue to date ÷ unique patients, labeled "to date" everywhere it
+   total revenue to date ÷ patients treated, labeled "to date" everywhere it
    appears. A true projected LTV (revenue rate × expected average patient
    retention) needs an observed or assumed retention period, which isn't
-   something the data can support yet for a newly launched account where
-   most patients are still in active treatment. If/when that changes, the
-   projected version can be added the same way `ACCOUNT_EOY_ARR_TARGET`
-   handles the ARR goal: as an explicit, disclosed assumption.
-4. **Clinic overview** shows the same shape of metrics clinic-wide: sessions,
-   revenue, unique/new patients, month-over-month growth, session mix by
-   visit type, revenue by month, and account (payer) mix. Revenue is the
-   real per-claim billed amount summed from the uploaded reports.
-5. The **"Ask about your data"** box at the top answers one-off questions —
-   e.g. "what is last 3 months MoM growth?", "revenue last 6 months",
-   "Horizon revenue this year" — with a short text answer and, where a trend
-   applies, a small chart. It's a lightweight local pattern matcher (metric +
-   time range + optional account name), not a general-purpose LLM: it
-   recognizes sessions, revenue, new/active/cumulative patients, show-up
-   rate, and growth ("MoM", "month over month"), combined with a time phrase
-   ("last N months", "this/last month", "year to date", "all time", a named
-   month) and an optional account name (or "clinic" for clinic-wide). Leave
-   out a metric, time range, or scope and it falls back to the current tab's
-   filters. Nothing is sent anywhere — it runs entirely against the data
-   already in your browser.
-6. Use **Upload files** (header, top right) to add more claims reports at any
-   time — new files accumulate into the existing dataset (see dedup note
-   above), they don't replace it. **Clear** removes all stored data and
-   returns to the upload screen.
+   something the data can support yet while most patients are still in
+   active treatment.
+4. Use **Upload files** (header, top right) to load a fresher export of the
+   workbook at any time — it replaces the dataset currently shown, it
+   doesn't merge with it. **Clear** removes all stored data and returns to
+   the upload screen.
 
 ### Sharing the dashboard with someone else
 
@@ -192,181 +119,52 @@ or colleague:
    `.json` snapshot file containing everything currently loaded.
 2. Send them that file (email, Slack, AirDrop, whatever).
 3. They open the same dashboard URL and drop the file into the upload
-   panel, exactly like a claims report. It loads instantly into an
+   panel, exactly like the workbook itself. It loads instantly into an
    identical dashboard — same numbers, same charts, no upload of the
-   original claims files required.
+   original workbook required.
 
-The snapshot merges in by encounter ID just like any other file, so it's
-safe to drop into a dashboard that already has other data loaded, and it
-plays nicely with re-uploading it later. To keep someone in sync going
-forward, either re-share an updated snapshot after each week's upload, or
-just have both people upload the same weekly claims reports independently —
-both approaches produce the same result. There's no shared/live view; each
-side's data is a separate copy in their own browser until the next
-snapshot or file is exchanged.
+There's no shared/live view; each side's data is a separate copy in their
+own browser until the next snapshot or workbook upload is exchanged.
 
-### Expected columns
+### The "Users Tracking" tab
 
-The parser is built for weekly claims/billing exports and matches headers
-case-insensitively (spaces/underscores/hyphens are ignored), so
-`date_of_service` and `Date Of Service` both resolve the same way. Only a
-subset of the ~115 columns a real claims export can contain are read —
-everything else (diagnosis codes, date of birth, address, and other PHI) is
-ignored, so no more than necessary ends up sitting in browser storage.
+The tab has an unusual shape: two header rows (row 1 marks the start column
+of each month block with a real date; row 2 names the five columns within
+each block — App Opened, Time in App (Hours), Coaching Sessions, Therapy
+Sessions, Value), a third "summary" row carrying aggregate/average formulas
+rather than a real user (skipped), and then one real row per registered
+user. The set of month blocks grows by one every time the workbook is
+re-exported for a new month — the parser detects block positions from the
+header rows every time rather than hardcoding them.
 
 | Column | Required |
 |---|---|
-| `external_encounter_id` | no, but strongly recommended — without it, rows can't be deduped across uploads |
-| `external_patient_id` | yes — stable patient identity |
-| `date_of_service` (`DD/MM/YYYY`) | yes |
-| `patient_first_name` / `patient_last_name` | yes (display name) |
-| `charge_amount_cents` | no (defaults to $0 if missing) |
-| `payer_name` | no (blank or `patient_self_pay` = Yes → "Self-pay") |
-| `patient_self_pay` (Yes/No) | no |
-| `appointment_name` | no (visit type — eval, therapy, coaching, etc.; defaults to "Unspecified") |
-| `procedure_code` | no |
-| `rendering_provider_first_name` / `_last_name` | no (defaults to "Unassigned") |
-| `do_not_bill` (Yes/No) | no — rows flagged Yes are excluded entirely |
+| Creation Date (col A) | yes — a real date; rows without one are skipped |
+| UserID (col B) | yes — opaque hashed ID, no display name anywhere on this tab |
+| Service Selected (col C) | no — `evaluation`, `coaching`, or `therapy` |
+| App Opened (per month block) | no — Yes/No |
+| Time in App (Hours) (per month block) | no |
+| Coaching Sessions (per month block) | no |
+| Therapy Sessions (per month block) | no |
+| Value (per month block) | no — dollars recognized that month |
 
-Dates are read as **DD/MM/YYYY**. Rows missing a patient ID, patient name, or
-a valid service date are skipped and counted in the "skipped" note under the
-header; rows flagged `do_not_bill` are also skipped (counted the same way).
+Nothing else on this tab is read, and `UserID` has no display name attached
+anywhere in it — the best PHI posture of any source this dashboard has used.
 
-Visit type (the label used for chart series and the "sessions by visit type"
-breakdown) normally comes straight from `appointment_name`, but a
-`procedure_code` of **H0038** always forces the visit type to "Coaching" —
-real exports have shown `appointment_name` mislabeled (e.g. "ADHD
-evaluation") on rows actually billed as coaching, and the procedure code is
-the more reliable signal. Any `appointment_name` containing the word
-"coaching" (regardless of case or prefix) is also normalized to the same
-"Coaching" label, so text variants don't fragment into separate chart
-series.
+**Methodology notes:**
 
-"New patients" is derived from each patient's earliest service date in the
-full dataset (or, on the account view, their earliest service date under
-that specific account/payer), keyed by `external_patient_id` — there's no
-separate new/returning column required.
-
-### Registered-patients export
-
-Alongside claims reports, you can upload an export from the product's own
-user database — everyone who has registered with a payer partner, whether
-or not they've been seen/billed yet. Drop it into the same upload panel;
-the app tells it apart from a claims report by its header row (no file
-extension or filename convention needed), so `.csv` or `.xlsx` both work.
-
-Only three columns are read:
-
-| Column | Required |
-|---|---|
-| `userId` | yes — dedupe key across uploads |
-| `clientCompany` | no (blank → not counted for any account) |
-| `createdAt` | no (blank/unparseable → excluded from the growth chart, still counted in the total) |
-
-This export tends to carry a lot more than that (name, email, phone, date
-of birth, IP address, device info, subscription status, and more) — none
-of it is read. `clientCompany` is normalized the same way `payer_name` is
-in claims data (e.g. any case of "horizon" → "Horizon"), so the two sources
-line up under the same account names. `createdAt` is expected as a plain
-ISO 8601 UTC timestamp (e.g. `2026-08-30T21:44:29.504Z`, the format this
-export has consistently used) — read as the patient's registration date,
-which drives the "Registered patient growth" chart. Re-uploading the file,
-or a later export that repeats the same `userId`, updates that row in
-place rather than double-counting it — tracked separately from claims
-duplicates as "registered patient records updated" in the header, since a
-userId match and a claim match are different things.
-
-There's no shared ID between this export and claims data — `userId` (this
-export) and `external_patient_id` (claims) come from different systems and
-aren't linked. The "N not yet booked" figures shown in the account view and
-Investor View are the difference between the two *counts*, not a verified
-per-patient match — disclosed as such wherever the number appears.
-
-### Sessions CRM export
-
-A third file type you can drop into the same upload panel: an export
-straight from the scheduling CRM listing **every session, past and
-scheduled** — not just upcoming ones. It's the dashboard's primary source
-for **session counts, the "sessions by month" visit-type breakdown, and
-show-up rate**, since it's more complete and current than claims (which
-only reflects what's been billed so far, and carries no show-up outcome at
-all). Its future-dated, non-cancelled rows also power the "Booked sessions"
-/ "Booked pipeline" stat on the account view and Investor View — how many
-upcoming sessions are on the books, how many distinct patients that
-represents, and a rough projected-revenue estimate. (This file replaced an
-earlier, narrower export that covered only upcoming sessions — if you have
-old snapshots or cached data from that format, they'll be ignored rather
-than misread, since the storage format version changed along with it.)
-
-Columns read:
-
-| Column | Required |
-|---|---|
-| `user` | yes — patient display name (this export has no stable patient ID) |
-| `title` | no (blank → grouped as "Unspecified" in the visit-type breakdown) |
-| `insuranceCarrier` | no (blank → not counted for any account) |
-| `scheduledFor` | yes — ISO 8601 timestamp of the session, past or future |
-| `status` | no (used only to exclude cancelled/no-show rows from the booked-pipeline count) |
-| `showUp` | no ("Yes"/"No" → real show-up rate; blank/other → excluded from that calculation) |
-
-Unlike claims and registered-patients uploads, which merge new rows into
-what's already loaded, **uploading a sessions file replaces the entire
-previous sessions set.** This export is a snapshot of the CRM's complete
-session list as of the moment it was pulled — by the time a fresh export
-arrives, the previous upload's rows are simply superseded, so there's
-nothing meaningful to merge them against.
-
-The "upcoming"/booked-pipeline count filters to sessions scheduled after
-right now and excludes cancelled/no-show statuses, so a past-dated or
-cancelled row still present in the export doesn't inflate the pipeline
-total. Projected revenue for that pipeline is a flat **$140 per session**
-estimate (`AVG_BOOKED_SESSION_REVENUE` in `src/lib/metrics.ts`) — update
-that constant if the real average changes. This is explicitly an estimate
-for sessions that haven't happened yet, kept separate everywhere from
-actual billed revenue (which always comes from real claim amounts), and
-disclosed as such in the Investor View footer.
-
-Because "Sessions"/"sessions by month"/"show-up rate" are computed from
-this file with their own date-range window (independent of the
-claims-derived window revenue/patient stats use), the account view's date
-preset (e.g. "Last 12 months") resolves separately for each — so the
-sessions chart's x-axis can span a different range than the revenue chart's
-if the two files' latest dates differ. This is deliberate: it lets the
-sessions chart reflect this file's own most current data rather than being
-capped by whatever claims happens to have billed so far.
-
-Beyond the hero stat, the booked pipeline also appears directly on the
-sessions/revenue/patients charts as a trailing, visually-distinct
-"Booked (upcoming)" bar for any future month it has data for — solid gray
-(not one of the categorical visit-type colors), reduced fill opacity, and a
-dashed border, always with its own legend entry so it never reads as an
-extra actual data point:
-
-- **Horizon sessions by month** (account view) — an extra bar segment for
-  upcoming booked sessions.
-- **Revenue by month** (account view) and **Monthly revenue** (Investor
-  View) — an extra bar for projected revenue.
-- **New patients per month** (account view) — an extra bar for upcoming
-  bookings from patients *not already in the account's claims history*
-  (matched by normalized display name against every claims row ever seen
-  for that account, not just the current date-range filter — there's no
-  shared ID between the two systems, so this match is approximate). A
-  patient booked for more than one future month only counts as new in the
-  earliest of them. A booked patient who's already been treated before
-  correctly contributes 0 here, even though they still count toward the
-  "Booked sessions (upcoming)" hero stat and the sessions/revenue
-  projections above (those intentionally count every upcoming booking
-  regardless of new-vs-returning, since pipeline volume and new-patient
-  acquisition are different questions).
-
-Deliberately *not* added: the "Cumulative revenue" hero chart on Investor
-View (it already carries its own separate EOY-target projection via the
-"Projected · December" callout, and stacking two different kinds of
-projection on one chart would confuse rather than clarify) and the
-cumulative patient-growth line charts (there's no reliable way to tell
-whether a booked patient is already counted in a claims- or registered-
-patient-based running total, since neither system shares an ID with the
-sessions export).
+- **Evaluation sessions** aren't tracked as a monthly count in the
+  workbook — each user whose `Service Selected` is "evaluation" counts as
+  exactly one evaluation session, dated to their Creation Date (their
+  intake).
+- **"Patients treated" / "engaged in care"** means a user has Coaching
+  Sessions > 0 or Therapy Sessions > 0 in at least one tracked month.
+- **Revenue** is the `Value` column summed across users and months — the
+  dollar value recognized in the workbook, not independently-verified
+  insurance claims data.
+- There's no forward-looking/scheduled data in this workbook, so there's no
+  "booked pipeline" or "upcoming sessions" figure anywhere in this version
+  of the dashboard.
 
 ## Tech
 

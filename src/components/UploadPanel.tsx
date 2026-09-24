@@ -59,11 +59,10 @@ export default function UploadPanel({ onFiles, busy, error, compact }: UploadPan
         }}
       />
       <p style={{ fontSize: compact ? 15 : 18, fontWeight: 600, color: '#0b0b0b' }}>
-        {busy ? 'Parsing claims…' : 'Drop your weekly claims reports here, or click to choose files'}
+        {busy ? 'Parsing workbook…' : 'Drop the Horizon tracking workbook here, or click to choose a file'}
       </p>
       <p style={{ fontSize: 13, color: '#898781', marginTop: 6 }}>
-        .csv or .xlsx claims exports, a registered-users export, or a .json snapshot shared by a colleague — select
-        or drop as many files at once as you like
+        The Horizon "Users Tracking" export (.xlsx), or a .json snapshot shared by a colleague
       </p>
       {error && (
         <p style={{ fontSize: 13, color: '#d03b3b', marginTop: 12, fontWeight: 600 }}>{error}</p>
