@@ -22,6 +22,10 @@ export const GRIDLINE = '#e1e0d9';
 export const AXIS_LINE = '#c3c2b7';
 export const GOOD = '#006300';
 export const CRITICAL = '#d03b3b';
+// Used only for the current, in-progress month's projected run-rate segment
+// stacked on top of the actual bar in "Revenue by month" / "New patients per
+// month" — deliberately neutral gray so it never reads as a real data series.
+export const PROJECTED = '#898781';
 
 export function seriesColor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length];

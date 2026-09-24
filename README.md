@@ -61,6 +61,16 @@ also serve from `/clinic-dashboards/` rather than `/`.
    by month"**, **"New patients per month"**, and **"Engaged (in-care)
    patient growth"** (cumulative patients who've had a coaching or therapy
    session) round out the page.
+
+   **"Revenue by month" and "New patients per month" both show a projected
+   run-rate for the real, currently in-progress calendar month** — a dashed
+   gray segment stacked on top of that month's actual bar, sized so the
+   full bar height is what the month is on pace to reach by its end (simple
+   run-rate math: actual-to-date ÷ fraction of the month elapsed so far). It
+   only appears on the month matching today's real date, and only while
+   that month isn't yet complete; every other month shows just its actual
+   total. This is a pace projection, not a forecast — it doesn't account for
+   seasonality, a slow start, or a busy end of month.
 3. **Investor View** is a share-ready pitch page: a headline ("From 6
    sessions in Jul 2026 to 85 in Sep 2026"), hero stats (ARR run-rate,
    revenue growth MoM, revenue to date, patient LTV to date, registered

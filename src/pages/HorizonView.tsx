@@ -95,7 +95,10 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <ChartCard title="Revenue by month" subtitle="Value recognized per the tracking workbook">
+        <ChartCard
+          title="Revenue by month"
+          subtitle="Value recognized per the tracking workbook · dashed = projected full-month pace"
+        >
           <SimpleBarChart
             data={periodMetrics.revenueByMonth}
             xKey="label"
@@ -103,10 +106,17 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
             color={SERIES_COLORS[1]}
             valueFormatter={formatCurrency}
             tickFormatter={formatCurrencyCompact}
+            projected={{ key: 'projected', label: 'Projected (month-to-date pace)' }}
           />
         </ChartCard>
-        <ChartCard title="New patients per month">
-          <SimpleBarChart data={newPatientsByMonth} xKey="label" yKey="count" color={SERIES_COLORS[1]} />
+        <ChartCard title="New patients per month" subtitle="Dashed = projected full-month pace">
+          <SimpleBarChart
+            data={newPatientsByMonth}
+            xKey="label"
+            yKey="count"
+            color={SERIES_COLORS[1]}
+            projected={{ key: 'projected', label: 'Projected (month-to-date pace)' }}
+          />
         </ChartCard>
         <ChartCard title="Engaged (in-care) patient growth" subtitle="Running total of patients with a coaching or therapy session">
           <SimpleLineChart data={engagedGrowth} xKey="label" yKey="total" color={SERIES_COLORS[1]} />

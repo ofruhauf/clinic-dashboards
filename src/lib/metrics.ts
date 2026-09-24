@@ -29,6 +29,12 @@ export function monthRange(start: string, end: string): string[] {
   return out;
 }
 
+/** Fraction (0–1] of the real current calendar month that has elapsed so far. */
+function currentMonthElapsedFraction(now: Date): number {
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  return now.getUTCDate() / daysInMonth;
+}
+
 /**
  * Month keys safe to treat as "complete": every month before the real current
  * one, plus the current month itself once most of it has elapsed (>= 70% of
@@ -37,10 +43,23 @@ export function monthRange(start: string, end: string): string[] {
  */
 export function excludeCurrentMonth(months: string[], now: Date = new Date()): string[] {
   const currentMonth = monthKey(now);
-  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
-  const elapsedFraction = now.getUTCDate() / daysInMonth;
-  const includeCurrentMonth = elapsedFraction >= 0.7;
+  const includeCurrentMonth = currentMonthElapsedFraction(now) >= 0.7;
   return months.filter((m) => m < currentMonth || (m === currentMonth && includeCurrentMonth));
+}
+
+/**
+ * How much more a month is projected to reach, on top of its actual total so
+ * far, by scaling actual-to-date by how much of the real calendar month has
+ * elapsed — e.g. $5,400 with 60% of the month elapsed projects to $9,000, a
+ * remainder of $3,600. Zero for any month that isn't the real, currently
+ * in-progress month (including the workbook's own latest month once it's
+ * lagged behind the real calendar).
+ */
+function projectedRemainder(month: string, actual: number, now: Date): number {
+  if (month !== monthKey(now)) return 0;
+  const elapsed = currentMonthElapsedFraction(now);
+  if (elapsed <= 0 || elapsed >= 1) return 0;
+  return Math.max(0, actual / elapsed - actual);
 }
 
 /**
@@ -87,7 +106,7 @@ export interface HorizonPeriodMetrics {
   totalSessions: number;
   revenue: number;
   sessionsByMonth: MonthlySeriesPoint[];
-  revenueByMonth: { month: string; label: string; revenue: number }[];
+  revenueByMonth: { month: string; label: string; revenue: number; projected: number }[];
 }
 
 /**
@@ -96,8 +115,18 @@ export interface HorizonPeriodMetrics {
  * counts as exactly one evaluation session, dated to their registration
  * month (their intake). Coaching/Therapy session counts and dollar Value
  * come directly from each user's monthly activity blocks.
+ *
+ * `revenueByMonth[].projected` is the additional amount, on top of that
+ * month's actual revenue, that the real current calendar month is on pace
+ * to reach by its end — zero for every other month. It's a simple run-rate
+ * extrapolation (actual-to-date ÷ fraction of the month elapsed), not a
+ * forecast that accounts for seasonality or trend.
  */
-export function computeHorizonPeriodMetrics(users: HorizonUserRow[], windowMonths: string[]): HorizonPeriodMetrics {
+export function computeHorizonPeriodMetrics(
+  users: HorizonUserRow[],
+  windowMonths: string[],
+  now: Date = new Date()
+): HorizonPeriodMetrics {
   const windowSet = new Set(windowMonths);
   const byMonth = new Map<string, MonthlySeriesPoint>();
   const revenueByMonthMap = new Map<string, number>();
@@ -126,7 +155,10 @@ export function computeHorizonPeriodMetrics(users: HorizonUserRow[], windowMonth
   }
 
   const sessionsByMonth = windowMonths.map((m) => byMonth.get(m)!);
-  const revenueByMonth = windowMonths.map((m) => ({ month: m, label: monthLabel(m), revenue: revenueByMonthMap.get(m) ?? 0 }));
+  const revenueByMonth = windowMonths.map((m) => {
+    const revenue = revenueByMonthMap.get(m) ?? 0;
+    return { month: m, label: monthLabel(m), revenue, projected: projectedRemainder(m, revenue, now) };
+  });
   const totalSessions = sessionsByMonth.reduce((sum, p) => sum + (p.total as number), 0);
   const revenue = revenueByMonth.reduce((sum, p) => sum + p.revenue, 0);
 
@@ -181,14 +213,25 @@ export function computeEngagedGrowth(users: HorizonUserRow[], windowMonths: stri
   return computeCumulativeGrowth(firstMonths, windowMonths);
 }
 
+/**
+ * `projected` is the additional new-patient count, on top of the real
+ * current month's actual count so far, that the month is on pace to reach
+ * by its end (see `computeHorizonPeriodMetrics` for the same run-rate
+ * method) — zero for every other month. Rounded, since a fractional person
+ * doesn't mean anything here.
+ */
 export function computeNewPatientsByMonth(
   users: HorizonUserRow[],
-  windowMonths: string[]
-): { month: string; label: string; count: number }[] {
+  windowMonths: string[],
+  now: Date = new Date()
+): { month: string; label: string; count: number; projected: number }[] {
   const counts = new Map<string, number>();
   for (const u of users) {
     const m = monthKey(u.createdAt);
     counts.set(m, (counts.get(m) ?? 0) + 1);
   }
-  return windowMonths.map((m) => ({ month: m, label: monthLabel(m), count: counts.get(m) ?? 0 }));
+  return windowMonths.map((m) => {
+    const count = counts.get(m) ?? 0;
+    return { month: m, label: monthLabel(m), count, projected: Math.round(projectedRemainder(m, count, now)) };
+  });
 }
