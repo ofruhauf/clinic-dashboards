@@ -1,4 +1,4 @@
-import { monthKey, monthLabel } from './metrics';
+import { monthLabel } from './metrics';
 import type { HorizonMonthActivity, HorizonServiceType, HorizonUserRow } from './types';
 
 // The sole data source for the Horizon dashboard: the practice's own D2C
@@ -55,33 +55,102 @@ interface MonthBlock {
   label: string;
   colAppOpened: number;
   colTimeInApp: number;
+  colCoachMsgMinutes: number;
+  colOtherInAppMinutes: number;
   colCoaching: number;
   colTherapy: number;
   colValue: number;
 }
 
-function detectMonthBlocks(headerRow1: unknown[], headerRow2: unknown[]): MonthBlock[] {
-  const blockStarts: number[] = [];
+const MONTH_NAMES = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+/**
+ * Each month block's start column, in left-to-right (chronological) order.
+ * Two header styles have shown up in the wild: an actual Excel date in row 1
+ * (the month's own year included), and a plain month-name string with no
+ * year at all (e.g. "October") — the workbook switched from the former to
+ * the latter between exports, so both are supported.
+ */
+function findBlockStarts(headerRow1: unknown[]): { start: number; monthIndex: number; year: number | null }[] {
+  const blocks: { start: number; monthIndex: number; year: number | null }[] = [];
   for (let c = 0; c < headerRow1.length; c++) {
-    if (headerRow1[c] instanceof Date) blockStarts.push(c);
+    const cell = headerRow1[c];
+    if (cell instanceof Date) {
+      blocks.push({ start: c, monthIndex: cell.getUTCMonth(), year: cell.getUTCFullYear() });
+      continue;
+    }
+    if (typeof cell === 'string') {
+      const idx = MONTH_NAMES.indexOf(cell.trim().toLowerCase());
+      if (idx >= 0) blocks.push({ start: c, monthIndex: idx, year: null });
+    }
   }
-  return blockStarts.map((start, i) => {
-    const end = i + 1 < blockStarts.length ? blockStarts[i + 1] : headerRow2.length;
+  return blocks;
+}
+
+/**
+ * Fills in the year for any block whose header only gave a month name.
+ * Blocks are always consecutive calendar months left to right, so once the
+ * last year-less block is anchored to the most recent real occurrence of
+ * its month at/before `now`, every earlier block is exactly one calendar
+ * month before the block right after it.
+ */
+function resolveBlockYears(
+  blocks: { start: number; monthIndex: number; year: number | null }[],
+  now: Date
+): number[] {
+  const years = blocks.map((b) => b.year);
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (years[i] != null) continue;
+    if (i === blocks.length - 1) {
+      let year = now.getUTCFullYear();
+      if (blocks[i].monthIndex > now.getUTCMonth()) year -= 1;
+      years[i] = year;
+    } else {
+      const d = new Date(Date.UTC(years[i + 1]!, blocks[i + 1].monthIndex - 1, 1));
+      years[i] = d.getUTCFullYear();
+    }
+  }
+  return years as number[];
+}
+
+function detectMonthBlocks(headerRow1: unknown[], headerRow2: unknown[], now: Date): MonthBlock[] {
+  const rawBlocks = findBlockStarts(headerRow1);
+  const years = resolveBlockYears(rawBlocks, now);
+
+  return rawBlocks.map((b, i) => {
+    const end = i + 1 < rawBlocks.length ? rawBlocks[i + 1].start : headerRow2.length;
     let colAppOpened = -1;
     let colTimeInApp = -1;
+    let colCoachMsgMinutes = -1;
+    let colOtherInAppMinutes = -1;
     let colCoaching = -1;
     let colTherapy = -1;
     let colValue = -1;
-    for (let c = start; c < end; c++) {
+    for (let c = b.start; c < end; c++) {
       const label = normalizeKey(headerRow2[c]);
       if (label === 'appopened') colAppOpened = c;
       else if (label === 'timeinapp(hours)' || label === 'timeinapphours') colTimeInApp = c;
+      else if (label === 'coachmessagingminutes') colCoachMsgMinutes = c;
+      else if (label === 'otherinappminutes') colOtherInAppMinutes = c;
       else if (label === 'coachingsessions') colCoaching = c;
       else if (label === 'therapysessions') colTherapy = c;
       else if (label === 'value') colValue = c;
     }
-    const month = monthKey(headerRow1[start] as Date);
-    return { month, label: monthLabel(month), colAppOpened, colTimeInApp, colCoaching, colTherapy, colValue };
+    const month = `${years[i]}-${String(b.monthIndex + 1).padStart(2, '0')}`;
+    return {
+      month,
+      label: monthLabel(month),
+      colAppOpened,
+      colTimeInApp,
+      colCoachMsgMinutes,
+      colOtherInAppMinutes,
+      colCoaching,
+      colTherapy,
+      colValue,
+    };
   });
 }
 
@@ -90,7 +159,10 @@ function parseServiceSelected(value: unknown): HorizonServiceType | null {
   return text === 'evaluation' || text === 'coaching' || text === 'therapy' ? text : null;
 }
 
-export async function parseHorizonFile(file: File): Promise<{ users: HorizonUserRow[]; months: string[]; skippedCount: number }> {
+export async function parseHorizonFile(
+  file: File,
+  now: Date = new Date()
+): Promise<{ users: HorizonUserRow[]; months: string[]; skippedCount: number }> {
   const { XLSX, workbook, sheetName } = await findUsersTrackingSheet(file);
   if (!sheetName) {
     throw new Error('Couldn\'t find a "Users Tracking" tab in this file.');
@@ -103,7 +175,7 @@ export async function parseHorizonFile(file: File): Promise<{ users: HorizonUser
 
   const headerRow1 = grid[0] ?? [];
   const headerRow2 = grid[1] ?? [];
-  const blocks = detectMonthBlocks(headerRow1, headerRow2);
+  const blocks = detectMonthBlocks(headerRow1, headerRow2, now);
   const months = blocks.map((b) => b.month);
 
   const users: HorizonUserRow[] = [];
@@ -124,15 +196,27 @@ export async function parseHorizonFile(file: File): Promise<{ users: HorizonUser
       continue;
     }
 
-    const monthly: HorizonMonthActivity[] = blocks.map((b) => ({
-      month: b.month,
-      label: b.label,
-      appOpened: b.colAppOpened >= 0 ? parseYesNo(row[b.colAppOpened]) : null,
-      timeInAppHours: b.colTimeInApp >= 0 ? toNumber(row[b.colTimeInApp]) : 0,
-      coachingSessions: b.colCoaching >= 0 ? toNumber(row[b.colCoaching]) : 0,
-      therapySessions: b.colTherapy >= 0 ? toNumber(row[b.colTherapy]) : 0,
-      value: b.colValue >= 0 ? toNumber(row[b.colValue]) : 0,
-    }));
+    const monthly: HorizonMonthActivity[] = blocks.map((b) => {
+      // "Time in App (Hours)" was later split into two separate minutes
+      // columns (coach messaging vs. everything else in-app) — combine them
+      // back into hours when that's what the workbook gives us, otherwise
+      // fall back to the original single-column export.
+      const timeInAppHours =
+        b.colCoachMsgMinutes >= 0 || b.colOtherInAppMinutes >= 0
+          ? (toNumber(row[b.colCoachMsgMinutes]) + toNumber(row[b.colOtherInAppMinutes])) / 60
+          : b.colTimeInApp >= 0
+            ? toNumber(row[b.colTimeInApp])
+            : 0;
+      return {
+        month: b.month,
+        label: b.label,
+        appOpened: b.colAppOpened >= 0 ? parseYesNo(row[b.colAppOpened]) : null,
+        timeInAppHours,
+        coachingSessions: b.colCoaching >= 0 ? toNumber(row[b.colCoaching]) : 0,
+        therapySessions: b.colTherapy >= 0 ? toNumber(row[b.colTherapy]) : 0,
+        value: b.colValue >= 0 ? toNumber(row[b.colValue]) : 0,
+      };
+    });
 
     users.push({
       userId,
