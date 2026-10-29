@@ -58,9 +58,12 @@ also serve from `/clinic-dashboards/` rather than `/`.
    **"Horizon sessions by month"** (stacked Evaluation / Coaching / Therapy)
    sits side by side with **"Registered patient growth"** (cumulative
    registrations, from each user's Creation Date). Further down, **"Revenue
-   by month"**, **"New patients per month"**, and **"Engaged (in-care)
-   patient growth"** (cumulative patients who've had a coaching or therapy
-   session) round out the page.
+   by month"**, **"New patients per month"**, **"Engaged (in-care) patient
+   growth"** (cumulative patients who've ever had a coaching or therapy
+   session), and **"Billable members by month"** (a per-month snapshot, not
+   cumulative — a member counts in a given month if they had at least one
+   coaching or therapy session that specific month, so someone active in
+   August but quiet in September counts in August only) round out the page.
 
    **"Revenue by month" and "New patients per month" both show a projected
    run-rate for the real, currently in-progress calendar month** — a faded

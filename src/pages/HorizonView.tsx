@@ -6,6 +6,7 @@ import SessionsByMonthChart from '../components/charts/SessionsByMonthChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
+  computeBillableMembersByMonth,
   computeEngagedGrowth,
   computeHorizonPeriodMetrics,
   computeNewPatientsByMonth,
@@ -44,6 +45,10 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
   );
   const engagedGrowth = useMemo(
     () => computeEngagedGrowth(dataset.users, windowMonths),
+    [dataset.users, windowMonths]
+  );
+  const billableMembersByMonth = useMemo(
+    () => computeBillableMembersByMonth(dataset.users, windowMonths),
     [dataset.users, windowMonths]
   );
 
@@ -120,6 +125,9 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
         </ChartCard>
         <ChartCard title="Engaged (in-care) patient growth" subtitle="Running total of patients with a coaching or therapy session">
           <SimpleLineChart data={engagedGrowth} xKey="label" yKey="total" color={SERIES_COLORS[1]} />
+        </ChartCard>
+        <ChartCard title="Billable members by month" subtitle="Members with at least 1 coaching or therapy session that month">
+          <SimpleBarChart data={billableMembersByMonth} xKey="label" yKey="count" color={SERIES_COLORS[1]} />
         </ChartCard>
       </div>
     </div>

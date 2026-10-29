@@ -214,6 +214,30 @@ export function computeEngagedGrowth(users: HorizonUserRow[], windowMonths: stri
 }
 
 /**
+ * Billable members per month: a member counts in a given month if they had
+ * at least one coaching or therapy session that month — a snapshot per
+ * month, not a running/cumulative total (unlike `computeEngagedGrowth`,
+ * which tracks the first month someone ever became engaged).
+ */
+export function computeBillableMembersByMonth(
+  users: HorizonUserRow[],
+  windowMonths: string[]
+): { month: string; label: string; count: number }[] {
+  const windowSet = new Set(windowMonths);
+  const counts = new Map<string, number>();
+  for (const m of windowMonths) counts.set(m, 0);
+  for (const user of users) {
+    for (const activity of user.monthly) {
+      if (!windowSet.has(activity.month)) continue;
+      if (activity.coachingSessions > 0 || activity.therapySessions > 0) {
+        counts.set(activity.month, (counts.get(activity.month) ?? 0) + 1);
+      }
+    }
+  }
+  return windowMonths.map((m) => ({ month: m, label: monthLabel(m), count: counts.get(m) ?? 0 }));
+}
+
+/**
  * `projected` is the additional new-patient count, on top of the real
  * current month's actual count so far, that the month is on pace to reach
  * by its end (see `computeHorizonPeriodMetrics` for the same run-rate
