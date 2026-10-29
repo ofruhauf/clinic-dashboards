@@ -11,6 +11,7 @@ export interface HorizonMonthActivity {
   label: string; // "Jul 2026"
   appOpened: boolean | null; // "Yes"/"No" for that month; null if blank
   timeInAppHours: number;
+  coachMessagingMinutes: number; // minutes chatting with a coach that month; 0 for older exports that only had a combined hours column
   coachingSessions: number;
   therapySessions: number;
   value: number; // dollars recognized that month, per the workbook

@@ -8,3 +8,7 @@ export function formatCurrencyCompact(value: number): string {
   }
   return formatCurrency(value);
 }
+
+export function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}

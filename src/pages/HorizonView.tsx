@@ -7,6 +7,8 @@ import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
   computeBillableMembersByMonth,
+  computeCoachingShareByMonth,
+  computeCoachingValueComparison,
   computeEngagedGrowth,
   computeHorizonPeriodMetrics,
   computeNewPatientsByMonth,
@@ -18,7 +20,7 @@ import {
 } from '../lib/metrics';
 import type { DateRangePreset, HorizonDataset } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
-import { formatCurrency, formatCurrencyCompact } from '../lib/format';
+import { formatCurrency, formatCurrencyCompact, formatPercent } from '../lib/format';
 import { useStatVisibility } from '../lib/useStatVisibility';
 
 interface HorizonViewProps {
@@ -50,6 +52,27 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
   const billableMembersByMonth = useMemo(
     () => computeBillableMembersByMonth(dataset.users, windowMonths),
     [dataset.users, windowMonths]
+  );
+  const coachingShareByMonth = useMemo(
+    () => computeCoachingShareByMonth(dataset.users, windowMonths),
+    [dataset.users, windowMonths]
+  );
+  const coachingValueComparison = useMemo(
+    () => computeCoachingValueComparison(dataset.users),
+    [dataset.users]
+  );
+  const coachingValueData = useMemo(
+    () => [
+      {
+        label: `${coachingValueComparison.coachingLabel} (${coachingValueComparison.coachingCount})`,
+        value: coachingValueComparison.coachingAvgValue,
+      },
+      {
+        label: `${coachingValueComparison.therapyOnlyLabel} (${coachingValueComparison.therapyOnlyCount})`,
+        value: coachingValueComparison.therapyOnlyAvgValue,
+      },
+    ],
+    [coachingValueComparison]
   );
 
   const registeredCount = useMemo(() => countRegistered(dataset.users), [dataset.users]);
@@ -128,6 +151,29 @@ export default function HorizonView({ dataset, preset }: HorizonViewProps) {
         </ChartCard>
         <ChartCard title="Billable members by month" subtitle="Members with at least 1 coaching or therapy session that month">
           <SimpleBarChart data={billableMembersByMonth} xKey="label" yKey="count" color={SERIES_COLORS[1]} />
+        </ChartCard>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <ChartCard
+          title="Coaching share of revenue"
+          subtitle="Approximate — a flat $150/month coaching fee ÷ total value, by month"
+        >
+          <SimpleLineChart
+            data={coachingShareByMonth}
+            xKey="label"
+            yKey="share"
+            color={SERIES_COLORS[1]}
+            valueFormatter={formatPercent}
+            tickFormatter={formatPercent}
+            allowDecimals
+          />
+        </ChartCard>
+        <ChartCard
+          title="Avg. value per patient: coaching vs. therapy-only"
+          subtitle="All-time total value, per patient — coaching-engaged vs. patients who've only had therapy"
+        >
+          <SimpleBarChart data={coachingValueData} xKey="label" yKey="value" color={SERIES_COLORS[1]} valueFormatter={formatCurrency} />
         </ChartCard>
       </div>
     </div>

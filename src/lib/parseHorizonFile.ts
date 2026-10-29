@@ -212,6 +212,7 @@ export async function parseHorizonFile(
         label: b.label,
         appOpened: b.colAppOpened >= 0 ? parseYesNo(row[b.colAppOpened]) : null,
         timeInAppHours,
+        coachMessagingMinutes: b.colCoachMsgMinutes >= 0 ? toNumber(row[b.colCoachMsgMinutes]) : 0,
         coachingSessions: b.colCoaching >= 0 ? toNumber(row[b.colCoaching]) : 0,
         therapySessions: b.colTherapy >= 0 ? toNumber(row[b.colTherapy]) : 0,
         value: b.colValue >= 0 ? toNumber(row[b.colValue]) : 0,

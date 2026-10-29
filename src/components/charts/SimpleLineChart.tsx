@@ -8,9 +8,21 @@ interface Props {
   color: string;
   valueSuffix?: string;
   valueFormatter?: (v: number) => string;
+  tickFormatter?: (v: number) => string;
+  /** False (the default) suits integer counts, e.g. patient growth; set true for fractional data like a 0–1 share. */
+  allowDecimals?: boolean;
 }
 
-export default function SimpleLineChart({ data, xKey, yKey, color, valueSuffix = '', valueFormatter }: Props) {
+export default function SimpleLineChart({
+  data,
+  xKey,
+  yKey,
+  color,
+  valueSuffix = '',
+  valueFormatter,
+  tickFormatter,
+  allowDecimals = false,
+}: Props) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
@@ -22,7 +34,14 @@ export default function SimpleLineChart({ data, xKey, yKey, color, valueSuffix =
           axisLine={{ stroke: AXIS_LINE }}
           interval="preserveStartEnd"
         />
-        <YAxis tick={{ fontSize: 11, fill: INK_MUTED }} tickLine={false} axisLine={false} width={48} allowDecimals={false} />
+        <YAxis
+          tick={{ fontSize: 11, fill: INK_MUTED }}
+          tickLine={false}
+          axisLine={false}
+          width={48}
+          allowDecimals={allowDecimals}
+          tickFormatter={tickFormatter}
+        />
         <Tooltip
           cursor={{ stroke: AXIS_LINE, strokeWidth: 1 }}
           contentStyle={{ borderRadius: 8, border: '1px solid rgba(11,11,11,0.10)', fontSize: 12.5 }}

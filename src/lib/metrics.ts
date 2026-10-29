@@ -1,4 +1,4 @@
-import type { DateRangePreset, HorizonUserRow } from './types';
+import type { DateRangePreset, HorizonMonthActivity, HorizonUserRow } from './types';
 
 export function monthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -235,6 +235,87 @@ export function computeBillableMembersByMonth(
     }
   }
   return windowMonths.map((m) => ({ month: m, label: monthLabel(m), count: counts.get(m) ?? 0 }));
+}
+
+// Flat per-month program fee used to approximate "coaching revenue" for a
+// patient-month, matching the methodology in the investor engagement/LTV
+// analysis: a month counts as coaching if it had 1+ coaching session or 30+
+// minutes of coach messaging. This is the same proxy that package uses —
+// not a real line item from billing — so it's an approximation here too.
+const COACHING_FEE = 150;
+
+function isCoachingMonth(activity: HorizonMonthActivity): boolean {
+  return activity.coachingSessions > 0 || activity.coachMessagingMinutes >= 30;
+}
+
+/** A patient is "coaching-engaged" if any month of theirs ever qualified as a coaching month. */
+export function isCoachingEngaged(user: HorizonUserRow): boolean {
+  return user.monthly.some(isCoachingMonth);
+}
+
+/**
+ * Coaching's share of total revenue by month: sum of the flat per-patient
+ * coaching fee for every coaching-qualifying patient-month, divided by that
+ * month's real total `Value`. An approximation (there's no per-feature price
+ * breakdown in the workbook), not an exact billing split.
+ */
+export function computeCoachingShareByMonth(
+  users: HorizonUserRow[],
+  windowMonths: string[]
+): { month: string; label: string; share: number }[] {
+  const windowSet = new Set(windowMonths);
+  const coachingFee = new Map<string, number>();
+  const totalValue = new Map<string, number>();
+  for (const m of windowMonths) {
+    coachingFee.set(m, 0);
+    totalValue.set(m, 0);
+  }
+  for (const user of users) {
+    for (const activity of user.monthly) {
+      if (!windowSet.has(activity.month)) continue;
+      totalValue.set(activity.month, (totalValue.get(activity.month) ?? 0) + activity.value);
+      if (isCoachingMonth(activity)) {
+        coachingFee.set(activity.month, (coachingFee.get(activity.month) ?? 0) + COACHING_FEE);
+      }
+    }
+  }
+  return windowMonths.map((m) => {
+    const total = totalValue.get(m) ?? 0;
+    return { month: m, label: monthLabel(m), share: total > 0 ? (coachingFee.get(m) ?? 0) / total : 0 };
+  });
+}
+
+export interface CoachingValueComparison {
+  coachingLabel: string;
+  coachingAvgValue: number;
+  coachingCount: number;
+  therapyOnlyLabel: string;
+  therapyOnlyAvgValue: number;
+  therapyOnlyCount: number;
+}
+
+/**
+ * Average total value to date (sum of every month's `Value`) for
+ * coaching-engaged patients vs. patients who've only ever had therapy
+ * sessions — the "$642 vs $381 per patient" comparison from the investor
+ * LTV analysis. All-time, not window-filtered: this is a patient-level
+ * classification, not a per-period figure.
+ */
+export function computeCoachingValueComparison(users: HorizonUserRow[]): CoachingValueComparison {
+  const totalValue = (u: HorizonUserRow) => u.monthly.reduce((sum, m) => sum + m.value, 0);
+  const avg = (list: HorizonUserRow[]) => (list.length === 0 ? 0 : list.reduce((s, u) => s + totalValue(u), 0) / list.length);
+
+  const coaching = users.filter(isCoachingEngaged);
+  const therapyOnly = users.filter((u) => !isCoachingEngaged(u) && u.monthly.some((m) => m.therapySessions > 0));
+
+  return {
+    coachingLabel: 'Coaching-engaged',
+    coachingAvgValue: avg(coaching),
+    coachingCount: coaching.length,
+    therapyOnlyLabel: 'Therapy-only',
+    therapyOnlyAvgValue: avg(therapyOnly),
+    therapyOnlyCount: therapyOnly.length,
+  };
 }
 
 /**

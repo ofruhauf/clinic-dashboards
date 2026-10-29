@@ -63,7 +63,22 @@ also serve from `/clinic-dashboards/` rather than `/`.
    session), and **"Billable members by month"** (a per-month snapshot, not
    cumulative — a member counts in a given month if they had at least one
    coaching or therapy session that specific month, so someone active in
-   August but quiet in September counts in August only) round out the page.
+   August but quiet in September counts in August only) round out that part
+   of the page.
+
+   **"Coaching share of revenue"** and **"Avg. value per patient: coaching
+   vs. therapy-only"** mirror the two coaching/LTV numbers from the
+   engagement & retention analysis shared with investors, computed the same
+   way from this same workbook: a patient-month counts as "coaching" if it
+   had 1+ coaching session or 30+ minutes of coach messaging that month,
+   charged a flat **$150 approximate program fee**; coaching's revenue share
+   for a month is that fee summed across every qualifying patient-month,
+   divided by the month's real total `Value`. The patient-value comparison
+   is all-time (not date-range filtered): average total value-to-date for
+   patients who were ever coaching-qualifying vs. patients who've only ever
+   had therapy sessions. Both are approximations — the workbook has no
+   per-feature price breakdown, so the $150 figure is a proxy, not a real
+   billing line item — disclosed as such in the chart subtitle.
 
    **"Revenue by month" and "New patients per month" both show a projected
    run-rate for the real, currently in-progress calendar month** — a faded
@@ -145,13 +160,13 @@ own browser until the next snapshot or workbook upload is exchanged.
 ### The "Users Tracking" tab
 
 The tab has an unusual shape: two header rows (row 1 marks the start column
-of each month block with a real date; row 2 names the five columns within
-each block — App Opened, Time in App (Hours), Coaching Sessions, Therapy
-Sessions, Value), a third "summary" row carrying aggregate/average formulas
-rather than a real user (skipped), and then one real row per registered
-user. The set of month blocks grows by one every time the workbook is
-re-exported for a new month — the parser detects block positions from the
-header rows every time rather than hardcoding them.
+of each month block — either a real date, or just the bare month name as
+text with no year, both are supported; row 2 names the columns within each
+block), a third "summary" row carrying aggregate/average formulas rather
+than a real user (skipped), and then one real row per registered user. The
+set of month blocks grows by one every time the workbook is re-exported for
+a new month — the parser detects block positions from the header rows every
+time rather than hardcoding them.
 
 | Column | Required |
 |---|---|
@@ -159,10 +174,16 @@ header rows every time rather than hardcoding them.
 | UserID (col B) | yes — opaque hashed ID, no display name anywhere on this tab |
 | Service Selected (col C) | no — `evaluation`, `coaching`, or `therapy` |
 | App Opened (per month block) | no — Yes/No |
-| Time in App (Hours) (per month block) | no |
+| Coach Messaging Minutes (per month block) | no — minutes chatting with a coach that month |
+| Other In-App Minutes (per month block) | no |
 | Coaching Sessions (per month block) | no |
 | Therapy Sessions (per month block) | no |
 | Value (per month block) | no — dollars recognized that month |
+
+Older exports had a single combined "Time in App (Hours)" column instead of
+the two separate minutes columns above — still read and summed into the
+same total, just without the coach-messaging-specific figure the newer
+format gives.
 
 Nothing else on this tab is read, and `UserID` has no display name attached
 anywhere in it — the best PHI posture of any source this dashboard has used.
@@ -174,7 +195,13 @@ anywhere in it — the best PHI posture of any source this dashboard has used.
   exactly one evaluation session, dated to their Creation Date (their
   intake).
 - **"Patients treated" / "engaged in care"** means a user has Coaching
-  Sessions > 0 or Therapy Sessions > 0 in at least one tracked month.
+  Sessions > 0 or Therapy Sessions > 0 in at least one tracked month (an
+  all-time/ever flag). **"Billable members by month"** is the same test
+  applied per month rather than ever — a per-month snapshot, not cumulative.
+- **"Coaching-engaged"** (used by the coaching-revenue charts) is a
+  stricter, separate definition matching the investor engagement/LTV
+  analysis: 1+ coaching session **or** 30+ minutes of coach messaging in a
+  month.
 - **Revenue** is the `Value` column summed across users and months — the
   dollar value recognized in the workbook, not independently-verified
   insurance claims data.
