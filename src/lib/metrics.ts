@@ -343,21 +343,26 @@ export function computeNewPatientsByMonth(
 
 /**
  * Visits every (user, offset, month) a cohort analysis can observe: for each
- * user whose registration month is itself one of `allMonths` (so "month 0"
- * is actually in the data), walks offset 0, 1, 2, ... up to however far that
- * user's cohort has aged within the workbook's tracked history. A user
- * registered before the workbook's earliest tracked month is skipped — their
- * true month 0 isn't observable, so there's no honest offset to anchor them to.
+ * user whose `anchorMonth` is itself one of `allMonths` (so "month 0" is
+ * actually in the data), walks offset 0, 1, 2, ... up to however far that
+ * user's cohort has aged within the workbook's tracked history. A user whose
+ * anchor falls before the workbook's earliest tracked month is skipped —
+ * their true month 0 isn't observable, so there's no honest offset to anchor
+ * them to. `anchorMonth` decides what "month 0" means — registration month,
+ * first-engaged month, etc.
  */
 function forEachCohortOffset(
   users: HorizonUserRow[],
   allMonths: string[],
+  anchorMonth: (user: HorizonUserRow) => string | null,
   visit: (user: HorizonUserRow, offset: number, month: string) => void
 ): void {
   const monthIndex = new Map(allMonths.map((m, i) => [m, i]));
   const maxIndex = allMonths.length - 1;
   for (const user of users) {
-    const cohortIdx = monthIndex.get(monthKey(user.createdAt));
+    const anchor = anchorMonth(user);
+    if (anchor == null) continue;
+    const cohortIdx = monthIndex.get(anchor);
     if (cohortIdx == null) continue;
     const maxOffset = maxIndex - cohortIdx;
     for (let offset = 0; offset <= maxOffset; offset++) {
@@ -373,20 +378,16 @@ export type RetentionPoint = {
   cohortSize: number;
 };
 
-/**
- * Blended retention curve: % of each cohort still billable (1+ coaching or
- * therapy session) N months after their registration month, averaged across
- * every cohort that's aged far enough to have an observed value at that
- * offset. `cohortSize` shrinks at higher offsets, since only the earliest
- * cohorts have aged that far yet — read the tail of the curve as thinner
- * evidence than the start.
- */
-export function computeRetentionCurve(users: HorizonUserRow[], allMonths: string[]): RetentionPoint[] {
+function buildRetentionCurve(
+  users: HorizonUserRow[],
+  allMonths: string[],
+  anchorMonth: (user: HorizonUserRow) => string | null
+): RetentionPoint[] {
   const cohortSizeByOffset = new Map<number, number>();
   const activeByOffset = new Map<number, number>();
   let maxObservedOffset = 0;
 
-  forEachCohortOffset(users, allMonths, (user, offset, month) => {
+  forEachCohortOffset(users, allMonths, anchorMonth, (user, offset, month) => {
     cohortSizeByOffset.set(offset, (cohortSizeByOffset.get(offset) ?? 0) + 1);
     maxObservedOffset = Math.max(maxObservedOffset, offset);
     const isActive = user.monthly.some((m) => m.month === month && (m.coachingSessions > 0 || m.therapySessions > 0));
@@ -404,6 +405,32 @@ export function computeRetentionCurve(users: HorizonUserRow[], allMonths: string
     });
   }
   return points;
+}
+
+/**
+ * Blended retention curve: % of each cohort still billable (1+ coaching or
+ * therapy session) N months after their registration month, averaged across
+ * every cohort that's aged far enough to have an observed value at that
+ * offset. `cohortSize` shrinks at higher offsets, since only the earliest
+ * cohorts have aged that far yet — read the tail of the curve as thinner
+ * evidence than the start. Includes every registered patient, whether or not
+ * they ever actually started care — see `computeEngagedRetentionCurve` for
+ * the version scoped to patients who did.
+ */
+export function computeRetentionCurve(users: HorizonUserRow[], allMonths: string[]): RetentionPoint[] {
+  return buildRetentionCurve(users, allMonths, (u) => monthKey(u.createdAt));
+}
+
+/**
+ * Retention curve scoped to patients who actually started care (1+ coaching
+ * or therapy session, ever), anchored to each patient's own first active
+ * month rather than their registration month — so it starts at 100% by
+ * construction (everyone in it was active in their own month 0) and shows
+ * the real drop-off from there, without the registration-to-first-session
+ * lag diluting month 0 the way `computeRetentionCurve` can.
+ */
+export function computeEngagedRetentionCurve(users: HorizonUserRow[], allMonths: string[]): RetentionPoint[] {
+  return buildRetentionCurve(users.filter(isEngaged), allMonths, firstEngagedMonth);
 }
 
 export type CohortRetentionSeries = {
@@ -429,7 +456,7 @@ export function computeRetentionCurveByCohort(users: HorizonUserRow[], allMonths
   const activeByCohortOffset = new Map<string, Map<number, number>>();
   let maxOffsetOverall = 0;
 
-  forEachCohortOffset(users, allMonths, (user, offset, month) => {
+  forEachCohortOffset(users, allMonths, (u) => monthKey(u.createdAt), (user, offset, month) => {
     const cohortKey = monthKey(user.createdAt);
     if (offset === 0) cohortSizes.set(cohortKey, (cohortSizes.get(cohortKey) ?? 0) + 1);
     maxOffsetByCohort.set(cohortKey, Math.max(maxOffsetByCohort.get(cohortKey) ?? 0, offset));
@@ -477,7 +504,7 @@ export function computeLtvCurve(users: HorizonUserRow[], allMonths: string[]): L
   let currentUser: HorizonUserRow | null = null;
   let cumulative = 0;
 
-  forEachCohortOffset(users, allMonths, (user, offset, month) => {
+  forEachCohortOffset(users, allMonths, (u) => monthKey(u.createdAt), (user, offset, month) => {
     if (user !== currentUser) {
       currentUser = user;
       cumulative = 0;

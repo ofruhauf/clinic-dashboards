@@ -96,15 +96,25 @@ also serve from `/clinic-dashboards/` rather than `/`.
    groups patients by months since *their own* registration month rather
    than by calendar month, and always covers each patient's full history
    (the date-range preset doesn't apply here, so it isn't shown on this
-   tab). Four charts:
+   tab). Five charts:
    - **"Horizon member retention"** — % of each cohort still billable (1+
      coaching or therapy session) N months after joining, blended across
      every cohort that's aged far enough to have a value at that offset.
+     Anchored to each patient's *registration* month, so month 0 can sit
+     below 100% — some registered patients never start care right away, or
+     at all.
+   - **"Retention from first session"** — the same test, but scoped to only
+     patients who actually started care (1+ coaching or therapy session,
+     ever) and anchored to each patient's own *first active* month instead
+     of their registration month. Starts at 100% by construction — everyone
+     in it was active in their own month 0 — and shows the real drop-off
+     from there, without registration-to-first-session lag diluting it the
+     way the chart above can.
    - **"Cumulative LTV by months since joining"** — average total value per
-     patient at each of those same offsets, observed to date (not a
-     modeled/extrapolated projection, unlike the "$2.7K at 24 months"
-     figures in the investor LTV deck).
-   - **"Retention by cohort"** — the same retention definition as above,
+     patient at the same registration-anchored offsets, observed to date
+     (not a modeled/extrapolated projection, unlike the "$2.7K at 24
+     months" figures in the investor LTV deck).
+   - **"Retention by cohort"** — the registration-anchored retention test,
      broken out one line per registration-month cohort (Jul 2026, Aug 2026,
      ...) instead of blended into a single average. A cohort's line simply
      stops once it runs out of observed months, rather than continuing flat

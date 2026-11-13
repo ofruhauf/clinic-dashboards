@@ -4,6 +4,7 @@ import CohortLineChart from '../components/charts/CohortLineChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
 import {
+  computeEngagedRetentionCurve,
   computeLtvCurve,
   computeLtvDistribution,
   computeRetentionCurve,
@@ -19,6 +20,10 @@ interface RetentionViewProps {
 
 export default function RetentionView({ dataset }: RetentionViewProps) {
   const retentionCurve = useMemo(() => computeRetentionCurve(dataset.users, dataset.months), [dataset.users, dataset.months]);
+  const engagedRetentionCurve = useMemo(
+    () => computeEngagedRetentionCurve(dataset.users, dataset.months),
+    [dataset.users, dataset.months]
+  );
   const retentionByCohort = useMemo(
     () => computeRetentionCurveByCohort(dataset.users, dataset.months),
     [dataset.users, dataset.months]
@@ -46,6 +51,20 @@ export default function RetentionView({ dataset }: RetentionViewProps) {
         >
           <SimpleLineChart
             data={retentionCurve}
+            xKey="label"
+            yKey="rate"
+            color={SERIES_COLORS[1]}
+            valueFormatter={formatPercent}
+            tickFormatter={formatPercent}
+            allowDecimals
+          />
+        </ChartCard>
+        <ChartCard
+          title="Retention from first session"
+          subtitle="Same test, scoped to patients who actually started care, anchored to each patient's own first active month — starts at 100% by construction"
+        >
+          <SimpleLineChart
+            data={engagedRetentionCurve}
             xKey="label"
             yKey="rate"
             color={SERIES_COLORS[1]}
