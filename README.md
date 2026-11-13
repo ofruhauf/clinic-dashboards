@@ -92,7 +92,26 @@ also serve from `/clinic-dashboards/` rather than `/`.
    remainder segment on its own). This is a pace projection, not a
    forecast — it doesn't account for seasonality, a slow start, or a busy
    end of month.
-3. **Investor View** is a share-ready pitch page: a headline ("From 6
+3. **Retention & LTV** is cohort-based, not calendar-based — every chart
+   groups patients by months since *their own* registration month rather
+   than by calendar month, and always covers each patient's full history
+   (the date-range preset doesn't apply here, so it isn't shown on this
+   tab). Three charts:
+   - **"Horizon member retention"** — % of each cohort still billable (1+
+     coaching or therapy session) N months after joining, blended across
+     every cohort that's aged far enough to have a value at that offset.
+   - **"Cumulative LTV by months since joining"** — average total value per
+     patient at each of those same offsets, observed to date (not a
+     modeled/extrapolated projection, unlike the "$2.7K at 24 months"
+     figures in the investor LTV deck).
+   - **"LTV distribution"** — patient count by all-time total value, bucketed
+     into $0 / $1–499 / $500–999 / $1,000–1,499 / $1,500+.
+
+   Both cohort-offset charts get thinner (fewer patients) at higher month
+   offsets, since only the earliest cohorts have aged that far yet — a
+   caption under the charts states the deepest point's actual sample size so
+   it isn't read as more solid than it is.
+4. **Investor View** is a share-ready pitch page: a headline ("From 6
    sessions in Jul 2026 to 85 in Sep 2026"), hero stats (ARR run-rate,
    revenue growth MoM, revenue to date, patient LTV to date, registered
    patients), the cumulative-revenue chart side by side with the
@@ -134,7 +153,7 @@ also serve from `/clinic-dashboards/` rather than `/`.
    retention) needs an observed or assumed retention period, which isn't
    something the data can support yet while most patients are still in
    active treatment.
-4. Use **Upload files** (header, top right) to load a fresher export of the
+5. Use **Upload files** (header, top right) to load a fresher export of the
    workbook at any time — it replaces the dataset currently shown, it
    doesn't merge with it. **Clear** removes all stored data and returns to
    the upload screen.

@@ -3,12 +3,13 @@ import UploadPanel from './components/UploadPanel';
 import FilterBar from './components/FilterBar';
 import HorizonView from './pages/HorizonView';
 import InvestorView from './pages/InvestorView';
+import RetentionView from './pages/RetentionView';
 import { looksLikeHorizonFile, parseHorizonFile } from './lib/parseHorizonFile';
 import { downloadSnapshot, isSnapshotFile, parseSnapshotFile } from './lib/snapshot';
 import { clearDataset, loadDataset, saveDataset } from './lib/storage';
 import { DATE_RANGE_PRESETS, type DateRangePreset, type HorizonDataset } from './lib/types';
 
-type Tab = 'horizon' | 'investor';
+type Tab = 'horizon' | 'retention' | 'investor';
 
 export default function App() {
   const [dataset, setDataset] = useState<HorizonDataset | null>(() => loadDataset());
@@ -202,7 +203,7 @@ export default function App() {
         }}
       >
         <nav style={{ display: 'flex', gap: 4, background: '#f0efec', borderRadius: 10, padding: 3 }}>
-          {(['horizon', 'investor'] as Tab[]).map((t) => (
+          {(['horizon', 'retention', 'investor'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -218,7 +219,7 @@ export default function App() {
                 boxShadow: tab === t ? '0 1px 2px rgba(11,11,11,0.10)' : 'none',
               }}
             >
-              {t === 'investor' ? 'Investor View' : 'Horizon'}
+              {t === 'investor' ? 'Investor View' : t === 'retention' ? 'Retention & LTV' : 'Horizon'}
             </button>
           ))}
         </nav>
@@ -232,6 +233,7 @@ export default function App() {
       </div>
 
       {tab === 'horizon' && <HorizonView dataset={dataset} preset={preset} />}
+      {tab === 'retention' && <RetentionView dataset={dataset} />}
       {tab === 'investor' && <InvestorView dataset={dataset} />}
 
       {!DATE_RANGE_PRESETS.length && null /* keep import used if list ever becomes conditional */}

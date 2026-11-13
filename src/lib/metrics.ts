@@ -340,3 +340,129 @@ export function computeNewPatientsByMonth(
     return { month: m, label: monthLabel(m), count, projected: Math.round(projectedRemainder(m, count, now)) };
   });
 }
+
+/**
+ * Visits every (user, offset, month) a cohort analysis can observe: for each
+ * user whose registration month is itself one of `allMonths` (so "month 0"
+ * is actually in the data), walks offset 0, 1, 2, ... up to however far that
+ * user's cohort has aged within the workbook's tracked history. A user
+ * registered before the workbook's earliest tracked month is skipped — their
+ * true month 0 isn't observable, so there's no honest offset to anchor them to.
+ */
+function forEachCohortOffset(
+  users: HorizonUserRow[],
+  allMonths: string[],
+  visit: (user: HorizonUserRow, offset: number, month: string) => void
+): void {
+  const monthIndex = new Map(allMonths.map((m, i) => [m, i]));
+  const maxIndex = allMonths.length - 1;
+  for (const user of users) {
+    const cohortIdx = monthIndex.get(monthKey(user.createdAt));
+    if (cohortIdx == null) continue;
+    const maxOffset = maxIndex - cohortIdx;
+    for (let offset = 0; offset <= maxOffset; offset++) {
+      visit(user, offset, allMonths[cohortIdx + offset]);
+    }
+  }
+}
+
+export type RetentionPoint = {
+  offset: number;
+  label: string;
+  rate: number;
+  cohortSize: number;
+};
+
+/**
+ * Blended retention curve: % of each cohort still billable (1+ coaching or
+ * therapy session) N months after their registration month, averaged across
+ * every cohort that's aged far enough to have an observed value at that
+ * offset. `cohortSize` shrinks at higher offsets, since only the earliest
+ * cohorts have aged that far yet — read the tail of the curve as thinner
+ * evidence than the start.
+ */
+export function computeRetentionCurve(users: HorizonUserRow[], allMonths: string[]): RetentionPoint[] {
+  const cohortSizeByOffset = new Map<number, number>();
+  const activeByOffset = new Map<number, number>();
+  let maxObservedOffset = 0;
+
+  forEachCohortOffset(users, allMonths, (user, offset, month) => {
+    cohortSizeByOffset.set(offset, (cohortSizeByOffset.get(offset) ?? 0) + 1);
+    maxObservedOffset = Math.max(maxObservedOffset, offset);
+    const isActive = user.monthly.some((m) => m.month === month && (m.coachingSessions > 0 || m.therapySessions > 0));
+    if (isActive) activeByOffset.set(offset, (activeByOffset.get(offset) ?? 0) + 1);
+  });
+
+  const points: RetentionPoint[] = [];
+  for (let offset = 0; offset <= maxObservedOffset; offset++) {
+    const cohortSize = cohortSizeByOffset.get(offset) ?? 0;
+    points.push({
+      offset,
+      label: `Month ${offset}`,
+      rate: cohortSize > 0 ? (activeByOffset.get(offset) ?? 0) / cohortSize : 0,
+      cohortSize,
+    });
+  }
+  return points;
+}
+
+export type LtvCurvePoint = {
+  offset: number;
+  label: string;
+  avgValue: number;
+  cohortSize: number;
+};
+
+/**
+ * Average cumulative value per patient, N months after their registration
+ * month — observed to date, not a modeled/extrapolated projection. Same
+ * cohort-offset basis as `computeRetentionCurve`, so the two read together.
+ */
+export function computeLtvCurve(users: HorizonUserRow[], allMonths: string[]): LtvCurvePoint[] {
+  const sumByOffset = new Map<number, number>();
+  const cohortSizeByOffset = new Map<number, number>();
+  let maxObservedOffset = 0;
+  let currentUser: HorizonUserRow | null = null;
+  let cumulative = 0;
+
+  forEachCohortOffset(users, allMonths, (user, offset, month) => {
+    if (user !== currentUser) {
+      currentUser = user;
+      cumulative = 0;
+    }
+    cumulative += user.monthly.find((m) => m.month === month)?.value ?? 0;
+    sumByOffset.set(offset, (sumByOffset.get(offset) ?? 0) + cumulative);
+    cohortSizeByOffset.set(offset, (cohortSizeByOffset.get(offset) ?? 0) + 1);
+    maxObservedOffset = Math.max(maxObservedOffset, offset);
+  });
+
+  const points: LtvCurvePoint[] = [];
+  for (let offset = 0; offset <= maxObservedOffset; offset++) {
+    const cohortSize = cohortSizeByOffset.get(offset) ?? 0;
+    points.push({
+      offset,
+      label: `Month ${offset}`,
+      avgValue: cohortSize > 0 ? (sumByOffset.get(offset) ?? 0) / cohortSize : 0,
+      cohortSize,
+    });
+  }
+  return points;
+}
+
+const LTV_BUCKETS: { label: string; test: (v: number) => boolean }[] = [
+  { label: '$0', test: (v) => v === 0 },
+  { label: '$1–499', test: (v) => v >= 1 && v < 500 },
+  { label: '$500–999', test: (v) => v >= 500 && v < 1000 },
+  { label: '$1,000–1,499', test: (v) => v >= 1000 && v < 1500 },
+  { label: '$1,500+', test: (v) => v >= 1500 },
+];
+
+/** Patient count by all-time total value bucket — a snapshot, not a trend. */
+export function computeLtvDistribution(users: HorizonUserRow[]): { label: string; count: number }[] {
+  const totalValue = (u: HorizonUserRow) => u.monthly.reduce((sum, m) => sum + m.value, 0);
+  const values = users.map(totalValue);
+  return LTV_BUCKETS.map((bucket) => ({
+    label: bucket.label,
+    count: values.filter(bucket.test).length,
+  }));
+}
