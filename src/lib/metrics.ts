@@ -406,6 +406,58 @@ export function computeRetentionCurve(users: HorizonUserRow[], allMonths: string
   return points;
 }
 
+export type CohortRetentionSeries = {
+  cohort: string; // e.g. "Jul 2026"
+  size: number;
+};
+
+export type CohortRetentionResult = {
+  data: { offset: number; label: string; [cohort: string]: number | string | null }[];
+  series: CohortRetentionSeries[];
+};
+
+/**
+ * Same retention definition as `computeRetentionCurve`, broken out one line
+ * per registration-month cohort instead of blended into a single weighted
+ * average. A cohort's value is `null` (a gap, not a drop to zero) for any
+ * offset it hasn't aged into yet — only offsets it's actually reached get a
+ * real 0%-or-higher rate.
+ */
+export function computeRetentionCurveByCohort(users: HorizonUserRow[], allMonths: string[]): CohortRetentionResult {
+  const cohortSizes = new Map<string, number>(); // keyed by raw "YYYY-MM", not the display label
+  const maxOffsetByCohort = new Map<string, number>();
+  const activeByCohortOffset = new Map<string, Map<number, number>>();
+  let maxOffsetOverall = 0;
+
+  forEachCohortOffset(users, allMonths, (user, offset, month) => {
+    const cohortKey = monthKey(user.createdAt);
+    if (offset === 0) cohortSizes.set(cohortKey, (cohortSizes.get(cohortKey) ?? 0) + 1);
+    maxOffsetByCohort.set(cohortKey, Math.max(maxOffsetByCohort.get(cohortKey) ?? 0, offset));
+    maxOffsetOverall = Math.max(maxOffsetOverall, offset);
+    const isActive = user.monthly.some((m) => m.month === month && (m.coachingSessions > 0 || m.therapySessions > 0));
+    if (isActive) {
+      if (!activeByCohortOffset.has(cohortKey)) activeByCohortOffset.set(cohortKey, new Map());
+      const byOffset = activeByCohortOffset.get(cohortKey)!;
+      byOffset.set(offset, (byOffset.get(offset) ?? 0) + 1);
+    }
+  });
+
+  const cohortKeys = [...cohortSizes.keys()].sort(); // "YYYY-MM" sorts chronologically as plain strings
+  const series: CohortRetentionSeries[] = cohortKeys.map((key) => ({ cohort: monthLabel(key), size: cohortSizes.get(key)! }));
+
+  const data: CohortRetentionResult['data'] = [];
+  for (let offset = 0; offset <= maxOffsetOverall; offset++) {
+    const row: CohortRetentionResult['data'][number] = { offset, label: `Month ${offset}` };
+    for (const key of cohortKeys) {
+      const reached = offset <= (maxOffsetByCohort.get(key) ?? -1);
+      row[monthLabel(key)] = reached ? (activeByCohortOffset.get(key)?.get(offset) ?? 0) / cohortSizes.get(key)! : null;
+    }
+    data.push(row);
+  }
+
+  return { data, series };
+}
+
 export type LtvCurvePoint = {
   offset: number;
   label: string;

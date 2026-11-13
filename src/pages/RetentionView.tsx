@@ -1,8 +1,14 @@
 import { useMemo } from 'react';
 import ChartCard from '../components/ChartCard';
+import CohortLineChart from '../components/charts/CohortLineChart';
 import SimpleBarChart from '../components/charts/SimpleBarChart';
 import SimpleLineChart from '../components/charts/SimpleLineChart';
-import { computeLtvCurve, computeLtvDistribution, computeRetentionCurve } from '../lib/metrics';
+import {
+  computeLtvCurve,
+  computeLtvDistribution,
+  computeRetentionCurve,
+  computeRetentionCurveByCohort,
+} from '../lib/metrics';
 import type { HorizonDataset } from '../lib/types';
 import { SERIES_COLORS } from '../lib/theme';
 import { formatCurrency, formatPercent } from '../lib/format';
@@ -13,6 +19,10 @@ interface RetentionViewProps {
 
 export default function RetentionView({ dataset }: RetentionViewProps) {
   const retentionCurve = useMemo(() => computeRetentionCurve(dataset.users, dataset.months), [dataset.users, dataset.months]);
+  const retentionByCohort = useMemo(
+    () => computeRetentionCurveByCohort(dataset.users, dataset.months),
+    [dataset.users, dataset.months]
+  );
   const ltvCurve = useMemo(() => computeLtvCurve(dataset.users, dataset.months), [dataset.users, dataset.months]);
   const ltvDistribution = useMemo(() => computeLtvDistribution(dataset.users), [dataset.users]);
 
@@ -53,10 +63,27 @@ export default function RetentionView({ dataset }: RetentionViewProps) {
       </div>
 
       <p style={{ fontSize: 12, color: '#898781', margin: 0 }}>
-        Later months rest on fewer cohorts that have aged that far — the last point above is based on{' '}
-        {deepestCohortSize.toLocaleString()} patient{deepestCohortSize === 1 ? '' : 's'}, read it as directional, not
-        exact.
+        Later months rest on fewer cohorts that have aged that far — the last point in the blended curve above is
+        based on {deepestCohortSize.toLocaleString()} patient{deepestCohortSize === 1 ? '' : 's'}, read it as
+        directional, not exact. The per-cohort chart below makes this explicit: each line simply stops once that
+        cohort runs out of observed months.
       </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+        <ChartCard
+          title="Retention by cohort"
+          subtitle="Same definition as above, one line per registration month — a line ends where that cohort's data does"
+          height={320}
+        >
+          <CohortLineChart
+            data={retentionByCohort.data}
+            xKey="label"
+            seriesKeys={retentionByCohort.series.map((s) => s.cohort)}
+            valueFormatter={formatPercent}
+            tickFormatter={formatPercent}
+          />
+        </ChartCard>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
         <ChartCard title="LTV distribution" subtitle="Patients by all-time total value">

@@ -96,7 +96,7 @@ also serve from `/clinic-dashboards/` rather than `/`.
    groups patients by months since *their own* registration month rather
    than by calendar month, and always covers each patient's full history
    (the date-range preset doesn't apply here, so it isn't shown on this
-   tab). Three charts:
+   tab). Four charts:
    - **"Horizon member retention"** — % of each cohort still billable (1+
      coaching or therapy session) N months after joining, blended across
      every cohort that's aged far enough to have a value at that offset.
@@ -104,6 +104,12 @@ also serve from `/clinic-dashboards/` rather than `/`.
      patient at each of those same offsets, observed to date (not a
      modeled/extrapolated projection, unlike the "$2.7K at 24 months"
      figures in the investor LTV deck).
+   - **"Retention by cohort"** — the same retention definition as above,
+     broken out one line per registration-month cohort (Jul 2026, Aug 2026,
+     ...) instead of blended into a single average. A cohort's line simply
+     stops once it runs out of observed months, rather than continuing flat
+     or dropping to zero — so you can see at a glance how much real data
+     backs each part of the curve.
    - **"LTV distribution"** — patient count by all-time total value, bucketed
      into $0 / $1–499 / $500–999 / $1,000–1,499 / $1,500+.
 
